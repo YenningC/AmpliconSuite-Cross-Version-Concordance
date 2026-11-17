@@ -381,18 +381,19 @@ def analyze(records, reference_version, options=None):
                             p_difference=p, p_difference_holm=None, difference_test=test,
                             inference=independence_unit+"_equal_weight", bootstrap_degenerate=bool(n >= 2 and lo == hi),
                             min_samples=min_samples, sufficient_samples=n >= min_samples,
-                            margin=None, agreement_upper=None, p_agreement_bound=None, agreement_decision="not_assessed")
+                            margin=None, agreement_lower=None, agreement_upper=None, p_agreement_bound=None, agreement_decision="not_assessed")
                 if is_primary and metric in AGREEMENT_METRICS and subset == "signal_positive":
                     margin = margins.get(metric)
                     u = min(1.0, estimate+math.sqrt(math.log(1/decision_alpha)/(2*n))) if n else None
+                    l = max(0., estimate-math.sqrt(math.log(1/decision_alpha)/(2*n))) if n else None
                     p_agree = math.exp(-2*n*(float(margin)-estimate)**2) if n and margin is not None and estimate < float(margin) else 1.0 if n and margin is not None else None
                     decision = "insufficient_evidence"
                     if n >= min_samples and margin is not None:
                         if u < float(margin):
                             decision = "within_margin"
-                        elif max(0., estimate-math.sqrt(math.log(1/decision_alpha)/(2*n))) > float(margin):
+                        elif l > float(margin):
                             decision = "exceeds_margin"
-                    stat.update(margin=margin, agreement_upper=u, p_agreement_bound=p_agree,
+                    stat.update(margin=margin, agreement_lower=l, agreement_upper=u, p_agreement_bound=p_agree,
                                 agreement_alpha=decision_alpha, agreement_decision=decision)
                 stats_rows.append(stat)
                 local_stats.append(stat)

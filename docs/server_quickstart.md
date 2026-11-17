@@ -5,6 +5,18 @@
 3. 选择results_only或with_bam示例，填写实际本地路径。
 4. 需要调用算法时准备锁定源码和对应运行环境，先check再run。
 
+## 批量导入
+
+0.4.0 支持一张 TSV 表导入整批样本，按样本逐个分析。完整格式、两种模板和统计图说明见 [批量输入指南](batch_input.md)。
+
+```sh
+asconcordance import-samples --samples samples.tsv --config batch.json --out batch.manifest.json
+asconcordance check --manifest batch.manifest.json --out /output/batch01
+asconcordance run --manifest batch.manifest.json --out /output/batch01
+```
+
+完成后打开 `sample_reports.md` 看每例图，`report.md` 看整组相似性、失配区间及三态兼容图。
+
 ## 无BAM，比较已有输出
 
 ```sh

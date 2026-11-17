@@ -1,0 +1,5 @@
+sample_id	patient_id	source_version	reference_build	result_version	aa_dir	ac_dir	aa_version	ac_version
+SYNTHETIC_01	SYNTHETIC_PATIENT_01	suite-1.6.0	hg19	suite-1.6.0	/data/SYNTHETIC_01/suite-1.6.0/aa	/data/SYNTHETIC_01/suite-1.6.0/ac	1.6.r0	2.0.0
+SYNTHETIC_01	SYNTHETIC_PATIENT_01	suite-1.6.0	hg19	suite-1.6.2	/data/SYNTHETIC_01/suite-1.6.2/aa	/data/SYNTHETIC_01/suite-1.6.2/ac	1.6.r2	2.0.1
+SYNTHETIC_02	SYNTHETIC_PATIENT_02	suite-1.6.0	hg19	suite-1.6.0	/data/SYNTHETIC_02/suite-1.6.0/aa	/data/SYNTHETIC_02/suite-1.6.0/ac	1.6.r0	2.0.0
+SYNTHETIC_02	SYNTHETIC_PATIENT_02	suite-1.6.0	hg19	suite-1.6.2	/data/SYNTHETIC_02/suite-1.6.2/aa	/data/SYNTHETIC_02/suite-1.6.2/ac	1.6.r2	2.0.1

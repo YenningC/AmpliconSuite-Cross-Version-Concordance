@@ -8,11 +8,12 @@ from pathlib import Path
 import random
 import re
 import sys
+from collections import Counter
 from . import __version__
 from .common import atomic_json, digest, now, table
 from .inputs import safe_id
 from .parsing import merge_intervals
-from .runner import empty_record, execute, local_reference, check_ac_runtime
+from .runner import empty_record, execute, local_reference, check_ac_runtime, prepare_ac_input
 from .versions import load_lock, verify_runtime
 from .concordance_policy import guarded_command
 
@@ -303,8 +304,9 @@ def _save_cache(job, signature, record):
             for p in directory.rglob('*'):
                 if p.is_file() and not p.is_symlink():
                     files[str(p)] = digest(p)
-    if (run / 'stages.json').is_file():
-        files[str(run / 'stages.json')] = digest(run / 'stages.json')
+    for name in ('stages.json', 'ac.input', 'ac_summary_map.txt'):
+        if (run / name).is_file():
+            files[str(run / name)] = digest(run / name)
     atomic_json(Path(job) / 'cache.json', dict(signature=signature, record=record, files=files))
 
 
@@ -343,7 +345,8 @@ def run_bounded_downstream(sample, seeds, runtime, entry, verified, config, out)
         'mtime_ns': p.stat().st_mtime_ns if p.is_file() else None} for p in license_paths]
     signature = _signature(dict(seeds=seeds, inputs=sample['_input_identities'], runtime=runtime,
         verified=identity, reference=config['reference'], reference_identity=config.get('_reference_identity'), policy=config.get('io_policy', {}),
-        runner_sha256=digest(__file__), policy_executor_sha256=digest(Path(__file__).with_name('concordance_policy.py')),
+        runner_sha256=digest(__file__), ac_input_writer_sha256=digest(Path(__file__).with_name('runner.py')),
+        policy_executor_sha256=digest(Path(__file__).with_name('concordance_policy.py')),
         aa_parameters=config.get('aa_parameters', {}), ac_parameters=config.get('ac_parameters', {})))
     cached = _cached_result(out, signature)
     if cached:
@@ -400,13 +403,12 @@ def run_bounded_downstream(sample, seeds, runtime, entry, verified, config, out)
         if aa_amplicon_count(attempt) != len(cycles):
             raise ValueError('Incomplete AA output')
         if cycles:
-            inputfile = attempt / 'ac.input'
-            inputfile.write_text(''.join('reconstruction\t' + str(c) + '\t' + str(c.with_name(c.name.replace('_cycles.txt', '_graph.txt'))) + '\n' for c in cycles))
+            stage = 'ac'
+            inputfile = prepare_ac_input(attempt)
             p = config.get('ac_parameters', {})
             command = [runtime['ac_python'], runtime['ac_script'], '-i', str(inputfile),
                        '--ref', sample['reference_build'], '-o', str(attempt / 'ac' / 'classification'),
                        '--min_size', str(p.get('min_size', 50000)), '--min_flow', str(p.get('min_flow', 1.0))]
-            stage = 'ac'
             stages[stage] = dict(status='running', argv=command, started=now())
             atomic_json(attempt / 'stages.json', stages)
             acenv = dict(env)
@@ -489,7 +491,22 @@ def run_concordance(config, lock, entries, out, check_only=False):
     handle = (out / '.benchmark.lock').open('a+')
     try:
         fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        return _run_locked(config, lock, entries, out, check_only)
+        progress_path = out / 'sample_progress.json'
+        previous_progress = progress_path.read_bytes() if progress_path.is_file() else None
+        try:
+            return _run_locked(config, lock, entries, out, check_only)
+        except (Exception, KeyboardInterrupt) as exc:
+            try:
+                if progress_path.is_file() and progress_path.read_bytes() != previous_progress:
+                    progress = json.loads(progress_path.read_text())
+                    for row in progress:
+                        if row['state'] in {'checking', 'running'}:
+                            row.update(state='interrupted' if isinstance(exc, KeyboardInterrupt) else 'aborted', updated_utc=now())
+                    atomic_json(progress_path, progress)
+                    table(out / 'sample_progress.tsv', progress)
+            except (OSError, ValueError, TypeError, KeyError):
+                pass  # Preserve the original failure even if progress cannot be saved.
+            raise
     finally:
         handle.close()
 
@@ -513,6 +530,19 @@ def _run_locked(config, lock, entries, out, check_only):
     atomic_json(out / 'versions.lock.json', lock)
     runtimes = {r['id']: r for r in config.get('runtimes', [])}
     checks, upstream, downstream, source_files = [], [], [], []
+    progress = [dict(order=i, sample_id=s['sample_id'], source_version=s['source_version'],
+                     state='queued', updated_utc=now()) for i, s in enumerate(config['samples'], 1)]
+
+    def record_progress(sample, state):
+        item = next(r for r in progress if r['sample_id'] == sample['sample_id'])
+        local = [r for r in downstream if r['sample_id'] == sample['sample_id']]
+        item.update(state=state, updated_utc=now(),
+                    result_status_counts=dict(Counter(r['status'] for r in local)))
+        atomic_json(out / 'sample_progress.json', progress)
+        table(out / 'sample_progress.tsv', progress)
+
+    atomic_json(out / 'sample_progress.json', progress)
+    table(out / 'sample_progress.tsv', progress)
     import_checks = []
     ref = config.get('reference', {})
     reference_identity = []
@@ -529,9 +559,10 @@ def _run_locked(config, lock, entries, out, check_only):
         reference_identity.append(dict(path=background, sha256=digest(background), kind='local_cnv_background_bed'))
     config['_reference_identity'] = reference_identity
     source_files.extend(reference_identity)
-    for sample in config['samples']:
+    for sample_index, sample in enumerate(config['samples'], 1):
         sid, source = sample['sample_id'], sample['source_version']
-        print(f'Input {sid}: source={source}, mode={config["mode"]}', flush=True)
+        record_progress(sample, 'checking')
+        print(f'[{sample_index}/{len(config["samples"])}] Input {sid}: source={source}, mode={config["mode"]}', flush=True)
         try:
             build = config.get('reference', {}).get('build', sample['reference_build'])
             if build != sample['reference_build']:
@@ -588,9 +619,11 @@ def _run_locked(config, lock, entries, out, check_only):
             checks.append(dict(sample_id=sid, status='ok', seed_count=len(seeds),
                 reference_build=build, reference_identity='declared_build_and_contig_lengths_only',
                 reason='No whole-genome BAM validation performed'))
+            record_progress(sample, 'ready')
         except Exception as exc:
             checks.append(dict(sample_id=sid, status='failed', reason=str(exc), stage='input_check'))
             sample['_input_failed'] = str(exc)
+            record_progress(sample, 'input_failed')
     input_identity = _signature(source_files)
     identity_file = out / 'input_identity.json'
     if identity_file.exists() and json.loads(identity_file.read_text())['hash'] != input_identity:
@@ -604,7 +637,7 @@ def _run_locked(config, lock, entries, out, check_only):
         atomic_json(out / 'config.resolved.json', config)
         return dict(check_only=True, input_check=checks, import_format_check=import_checks)
     verified = {}
-    for sample in config['samples']:
+    for sample_index, sample in enumerate(config['samples'], 1):
         sid, source = sample['sample_id'], sample['source_version']
         versions = list(dict.fromkeys([source, *config['target_versions']]))
         if sample.get('_input_failed'):
@@ -612,7 +645,11 @@ def _run_locked(config, lock, entries, out, check_only):
                 r = empty_record(sid, '__input_check__', vid, 'failed', 'input_check', sample['_input_failed'])
                 r.update(analysis_kind='aa_ac', source_version=source, comparison_eligible=False)
                 downstream.append(r)
+            record_progress(sample, 'input_failed')
+            atomic_json(out / 'downstream_records.json', downstream)
             continue
+        record_progress(sample, 'running')
+        print(f'[{sample_index}/{len(config["samples"])}] Analyzing {sid}; source={source}; {len(versions)} versions', flush=True)
         seeds = sample['seeds']
         sampling = config.get('sampling', {})
         max_seeds = int(sampling.get('max_seeds', 10))
@@ -718,6 +755,7 @@ def _run_locked(config, lock, entries, out, check_only):
                         downstream.append(r)
         atomic_json(out / 'downstream_records.json', downstream)
         atomic_json(out / 'upstream_records.json', upstream)
+        record_progress(sample, 'finished')
     atomic_json(out / 'config.resolved.json', config)
     atomic_json(out / 'downstream_records.json', downstream)
     atomic_json(out / 'upstream_records.json', upstream)
@@ -740,6 +778,10 @@ def main(argv=None):
         p.add_argument('--out', required=True)
     p = sub.add_parser('report'); p.add_argument('--out', required=True)
     p = sub.add_parser('demo'); p.add_argument('--out', required=True)
+    p = sub.add_parser('import-samples', help='Convert a local sample TSV and shared JSON config into a batch manifest')
+    p.add_argument('--samples', required=True)
+    p.add_argument('--config', required=True)
+    p.add_argument('--out', required=True)
     p = sub.add_parser('prepare-panel', help='Fetch verified upstream sources without reading samples')
     p.add_argument('--out', required=True)
     p.add_argument('--versions', nargs='+')
@@ -747,6 +789,11 @@ def main(argv=None):
     sub.add_parser('versions')
     args = parser.parse_args(argv)
     try:
+        if args.command == 'import-samples':
+            from .concordance_batch import import_samples
+            config = import_samples(args.samples, args.config, args.out)
+            print(f'Saved batch manifest: {Path(args.out).resolve()} ({len(config["samples"])} samples; serial analysis)')
+            return 0
         if args.command == 'prepare-panel':
             from .versions import prepare_panel
             print('Saved ' + str(prepare_panel(args.out, args.versions, args.lock)))
@@ -769,7 +816,7 @@ def main(argv=None):
             from .concordance_report import write_concordance_reports
             out = Path(args.out).resolve()
             run_version = json.loads((out / 'provenance.json').read_text()).get('program_version')
-            if run_version not in {PROGRAM_VERSION, '0.3.0', '0.3.1'}:
+            if run_version not in {PROGRAM_VERSION, '0.3.0', '0.3.1', '0.3.2'}:
                 raise ValueError('Use the original program version to redraw this report, or run the manifest into a new output directory')
             expected = json.loads((out / 'report_inputs.sha256.json').read_text())
             if not all((out / name).is_file() and digest(out / name) == value for name, value in expected.items()):

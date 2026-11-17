@@ -4,7 +4,7 @@
 
 **以有限计算比较不同版本的扩增结果，输出逐样本天梯图和有明确证据边界的兼容性报告。**
 
-版本 **0.3.2**。固定参考为 **Suite 1.6.2 / AA 1.6.r2 / AC 2.0.1**，不会随上游更新自动改变。本项目是独立开发的本地科研工具，不属于官方AmpliconSuite组件。
+版本 **0.4.0**。固定参考为 **Suite 1.6.2 / AA 1.6.r2 / AC 2.0.1**，不会随上游更新自动改变。本项目是独立开发的本地科研工具，不属于官方AmpliconSuite组件。
 
 > 相似度只描述已观察到的软件输出，不是生物学真实性概率，也不证明完整流程可互换。允许差异未预设、样本不足或证据不完整时，结论保留为“证据不足”。
 
@@ -54,9 +54,23 @@ asconcordance report --out runs/comparison
 
 相对路径以清单文件所在目录为准。原文件只读，输出必须与输入/参考目录分开。可显式指定 `aa_dir`、`ac_dir`，也支持规范化 `run_dir` 或可识别的Suite `result_dir`；目录有歧义时不猜测。尽量保留graph、cycles、summary、分类profile与feature BED，只有图片或分类标签不足以完成比较。
 
-`check` 检查清单、坐标、BAM 头、现成索引和小型结果文件格式。`import_format_check.tsv` 显示每份导入的表头、文件计数以及匹配问题。`run`另核验真实组件版本和源码，缺环境/失败不替换为最新版。`report` 重绘同程序版本的完整性已核验结果。0.3.2 可以重绘通过完整性校验的 0.3.0 和 0.3.1 报告。升级后的计算请使用新输出目录。报告成功生成不等于所有科学计算成功，须同时查看运行覆盖率和异常记录。
+`check` 检查清单、坐标、BAM 头、现成索引和小型结果文件格式。`import_format_check.tsv` 显示每份导入的表头、文件计数以及匹配问题。`run`另核验真实组件版本和源码，缺环境/失败不替换为最新版。`report` 重绘同程序版本的完整性已核验结果。0.4.0 可以重绘通过完整性校验的 0.3.0、0.3.1 和 0.3.2 报告，不重跑算法。升级后的计算请使用新输出目录。报告成功生成不等于所有科学计算成功，须同时查看运行覆盖率和异常记录。
 
 [服务器步骤](docs/server_quickstart.md)说明多版本配置；[依赖说明](docs/environment_setup.md)说明历史环境；[局部CNV校准](docs/local_cnv_calibration.md)说明原始来源证据要求。
+
+## 一批样本输入与整组报告（0.4.0）
+
+一张本地 TSV 样本表配一份共享 JSON 配置，按样本首次出现顺序逐例处理，无需改变样本名或使用固定输出文件夹名称。
+
+```sh
+asconcordance import-samples --samples samples.tsv --config batch.json --out batch.manifest.json
+asconcordance check --manifest batch.manifest.json --out runs/batch01
+asconcordance run --manifest batch.manifest.json --out runs/batch01
+```
+
+有 BAM 的模板为 [样本表](examples/samples.with_bam.tsv) + [共享配置](examples/batch.with_bam.json)；无需 BAM 的模板为 [已有结果表](examples/samples.results_only.tsv) + [共享配置](examples/batch.results_only.json)。模板是人工占位路径，运行前填写实际数据及环境。[完整列说明、路径规则和批量步骤](docs/batch_input.md)。
+
+打开 `sample_reports.md` 查看全部样本图，`report.md` 查看整组统计。新增 `cohort_compatibility.*` 同时显示实际失配指标、区间、预设允许差异、独立样本或患者数及联合判定，精确绘图数据保存在 `cohort_compatibility_metrics.tsv`。填写 `patient_id` 后按患者聚合；来源版本不同和仅 AC 分别报告。每例图展示观察差异，单个样本不作总体等效判断。`sample_progress.tsv` 保存串行进度和故障样本。
 
 ## 计算范围与默认值
 
@@ -106,14 +120,18 @@ asconcordance report --out runs/comparison
 
 ## 输出与续跑
 
+![人工整组统计兼容图](docs/assets/synthetic_cohort_compatibility.png)
+
 | 输出 | 内容 |
 |---|---|
 | `report.md`、`summary.json` | 配对差异、分母、参考版本与结论范围 |
 | `import_format_check.tsv` | `asconcordance check` 的小文件格式核查 |
 | `similarity_ladder.*`、`sample_ladders/` | 汇总及逐样本天梯图，PNG/PDF/SVG |
-| `sample_plot_index.tsv`、`sample_similarity.tsv` | 图索引、观察相似度和状态 |
+| `sample_reports.md`、`sample_plot_index.tsv`、`sample_similarity.tsv` | 全部样本图链接、观察相似度和状态 |
 | `compatibility_table.*`、`compatibility_combined.tsv` | 三态兼容表 |
 | `upstream_retention_ladder.*`、`upstream_*.tsv` | 上游保留率、区间与校准状态 |
+| `cohort_compatibility.*`、`cohort_compatibility_metrics.tsv` | 整组失配、区间、阈值、独立单位数和统计判定 |
+| `sample_progress.json`、`sample_progress.tsv` | 样本处理顺序、进度和结果状态计数 |
 | `downstream/` | 分层差异、统计和兼容判定 |
 | `sampling/`、`source_bridge/` | 冻结抽样与来源复现检查 |
 | `imports/`、`reclassifications/`、`*_jobs/`、`cnv_cache/` | 小型结果副本、日志、中间文件和缓存证据 |
@@ -122,6 +140,8 @@ asconcordance report --out runs/comparison
 重复同一run命令可续跑。缓存先核对原输出、实际源码/依赖和参数，再重新解析，不直接相信缓存标签。改变清单需新输出目录。BAM采用首、中、尾三段64KiB抽样指纹，不声称全文件完整性校验。
 
 ## 验证状态
+
+0.4.0 批量更新已完成 **257 项本地测试，另 1 项可选集成跳过**。人工数据验证了公共批量导入、串行人工 BAM 调用、失败后继续、中断续跑、患者分组及整组图的精确置信界；这属于程序验证，不是患者兼容结论。
 
 0.3.0 回归覆盖独立校准、患者聚类、探索性比较、配对差异首页和部分原生结果解析。真实 CNVkit 0.9.10 和 0.9.13 已用人工 BAM 验证局部流程。Suite 1.5.3 具备核验过的源码锁和本机组件启动证据。
 

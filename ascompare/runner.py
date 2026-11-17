@@ -94,6 +94,38 @@ def check_ac_runtime(log, version):
         raise RuntimeError('Required BFBArchitect integration was not confirmed or failed; inspect ac.log')
 
 
+def prepare_ac_input(attempt):
+    """Write the native AC list and summary map from a staged single-sample AA run."""
+    from .parsing import _amplicon_files, aa_amplicon_count
+
+    attempt = Path(attempt).absolute()
+    aa = attempt / 'aa'
+    cycles = _amplicon_files(sorted(aa.glob('*_amplicon*_cycles.txt')), 'cycles')
+    graphs = _amplicon_files(sorted(aa.glob('*_amplicon*_graph.txt')), 'graph')
+    count = aa_amplicon_count(attempt)
+    if not count or count != len(cycles) or cycles.keys() != graphs.keys():
+        raise FileNotFoundError('AA summary count does not match complete graph/cycles pairs')
+    summary = next(aa.glob('*_summary.txt'))
+    samples = {sample for _, sample in [*cycles.values(), *graphs.values()]}
+    if len(samples) != 1:
+        raise ValueError('AA graph/cycles files do not have one common sample prefix')
+    sample, = samples
+    if any(re.search(r'\s', str(value)) for value in (sample, summary)):
+        raise ValueError('AC input paths and sample prefixes containing whitespace are unsupported by the native summary map')
+
+    rows = []
+    for amplicon, (cycle, _) in cycles.items():
+        graph, _ = graphs[amplicon]
+        if any(not path.is_file() or not path.stat().st_size for path in (cycle, graph)):
+            raise FileNotFoundError('AA graph/cycles pair missing or empty: ' + amplicon)
+        rows.append(f'{sample}\t{cycle}\t{graph}\n')
+    inputfile = attempt / 'ac.input'
+    inputfile.write_text(''.join(rows))
+    # Several AC releases read this even with a complete, nonempty graph list.
+    inputfile.with_name(f'{inputfile.stem}_summary_map.txt').write_text(f'{sample}\t{summary}\n')
+    return inputfile
+
+
 def run_jobs(config, samples, runtimes, out):
     if not config.get('synthetic'):
         raise ValueError('Legacy unguarded AA execution is disabled; use the bounded concordance workflow')
@@ -194,14 +226,8 @@ def run_jobs(config, samples, runtimes, out):
                         stage='result_reading'
                         raise FileNotFoundError('AA summary missing/unrecognized or graph/cycles count mismatch; AC not started')
                     if cycles:
-                        rows=[]
-                        for cycle in cycles:
-                            graph=Path(str(cycle).replace('_cycles.txt','_graph.txt'))
-                            if not graph.exists() or not graph.stat().st_size or not cycle.stat().st_size:
-                                stage='result_reading'; raise FileNotFoundError('AA graph/cycles pair missing or empty')
-                            # Official AC input: sample, cycles, graph (sample may include amplicon prefix).
-                            rows.append('\t'.join(['reconstruction',str(cycle),str(graph)]))
-                        inputfile=attempt/'ac.input'; inputfile.write_text('\n'.join(rows)+'\n')
+                        stage='result_reading'
+                        inputfile=prepare_ac_input(attempt)
                         ac=[runtime['ac_python'],runtime['ac_script'],'-i',str(inputfile),'--ref',config['reference']['build'],'-o',str(attempt/'ac'/'classification'),
                             '--min_size',str(config.get('ac_min_size',50000)),'--min_flow',str(config.get('ac_min_flow',1.0))]
                         stage='ac'; stages[stage]={'status':'running','argv':ac,'started':now()}; atomic_json(attempt/'stages.json',stages)

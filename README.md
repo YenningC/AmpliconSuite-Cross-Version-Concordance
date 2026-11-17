@@ -6,7 +6,7 @@
 
 AmpliconSuite Cross-Version Concordance is an independent, local research tool. It compares existing AmpliconSuite outputs, orchestrates selected-seed AA/AC runs, and evaluates whether known candidate seeds remain selected after local CNVkit reassessment. It produces per-sample similarity ladders, paired difference tables and compatibility reports.
 
-**Version:** 0.3.2 · **Fixed reference:** Suite **1.6.2**, AA **1.6.r2**, AC **2.0.1**. The reference is frozen; installing a newer upstream release does not change it. This project is not an official AmpliconSuite component.
+**Version:** 0.4.0 · **Fixed reference:** Suite **1.6.2**, AA **1.6.r2**, AC **2.0.1**. The reference is frozen; installing a newer upstream release does not change it. This project is not an official AmpliconSuite component.
 
 > Similarity describes observed software outputs. It is not a probability of biological truth or proof that complete workflows are interchangeable. Compatibility remains **insufficient evidence** when margins are unspecified or evidence is inadequate.
 
@@ -67,9 +67,23 @@ asconcordance report --out runs/comparison
 
 Paths are resolved relative to the manifest. Output must be separate from inputs and resources. Results can be specified with `aa_dir`/`ac_dir`, a `run_dir` containing `aa` and `ac`, or a recognizable Suite `result_dir`; ambiguous directories are rejected. Keep the original graph, cycles, summary, classification profiles and feature BED files where available. An image or summary label alone is insufficient.
 
-`check` inspects input declarations, coordinates, BAM headers, existing indexes and small result-file formats. `import_format_check.tsv` lists AA/AC file counts, headings and matching issues. `run` also checks real component versions and source identities. `report` redraws saved, integrity-checked records from the same program version without accessing BAM. Use a new output directory for runs started with an earlier release. Version 0.3.2 can redraw verified reports from 0.3.0 and 0.3.1. A completed command/report does not imply that every scientific job succeeded: inspect coverage and failure tables.
+`check` inspects input declarations, coordinates, BAM headers, existing indexes and small result-file formats. `import_format_check.tsv` lists AA/AC file counts, headings and matching issues. `run` also checks real component versions and source identities. `report` redraws saved, integrity-checked records from the same program version without accessing BAM. Use a new output directory for runs started with an earlier release. Version 0.4.0 can redraw integrity-checked reports from 0.3.0, 0.3.1 and 0.3.2 without rerunning algorithms. A completed command/report does not imply that every scientific job succeeded: inspect coverage and failure tables.
 
 See the [server guide](docs/server_quickstart.md), [environment instructions](docs/environment_setup.md) and [local CNV calibration requirements](docs/local_cnv_calibration.md) for runtime configuration. These detailed technical notes are currently in Chinese; commands and configuration keys are shared across both languages.
+
+### Batch input and cohort reports (0.4.0)
+
+Import a local sample TSV and a shared JSON config, then analyze each sample in first-appearance order:
+
+```sh
+asconcordance import-samples --samples samples.tsv --config batch.json --out batch.manifest.json
+asconcordance check --manifest batch.manifest.json --out runs/batch01
+asconcordance run --manifest batch.manifest.json --out runs/batch01
+```
+
+Templates: [with BAM sample table](examples/samples.with_bam.tsv) + [config](examples/batch.with_bam.json), or [existing results table](examples/samples.results_only.tsv) + [config](examples/batch.results_only.json). These contain synthetic placeholder paths; configure your actual inputs and runtimes. Sample and output-folder names are your choice. See the [full input schema, path rules and batch guide](docs/batch_input.md).
+
+Open `sample_reports.md` for all sample plots and `report.md` for the cohort. The new `cohort_compatibility.*` figure shows the actual statistical decision endpoints, bounds, prespecified margins, independent-unit counts and conditional final decisions. `cohort_compatibility_metrics.tsv` preserves its exact data. Patient IDs group linked samples; source versions and AC-only analyses stay separate. Per-sample plots show observed differences, not formal single-sample compatibility. `sample_progress.tsv` tracks serial processing and retains failed samples.
 
 ## Bounded computation
 
@@ -136,6 +150,8 @@ Execution failures, missing files and unsupported classes remain distinct from t
 
 *Illustration generated from invented result files. No patient data or genuine AA/AC execution is represented.*
 
+![Synthetic cohort compatibility figure](docs/assets/synthetic_cohort_compatibility.png)
+
 | Output | Contents |
 |---|---|
 | `report.md`, `summary.json` | Paired effects, denominators, source/reference identities and evidence |
@@ -144,6 +160,8 @@ Execution failures, missing files and unsupported classes remain distinct from t
 | `sample_plot_index.tsv`, `sample_similarity.tsv` | Plot paths, observed similarities and evaluation status |
 | `compatibility_table.*`, `compatibility_combined.tsv` | Three-state compatibility summaries |
 | `upstream_retention_ladder.*`, `upstream_*.tsv` | Local retention plots, seed/sample statistics and calibration state |
+| `cohort_compatibility.*`, `cohort_compatibility_metrics.tsv` | Cohort endpoint differences, bounds, margins, independent n and final decisions |
+| `sample_progress.json`, `sample_progress.tsv` | Serial sample order, state and result status counts |
 | `downstream/` | Stratified comparisons, differences, statistics and compatibility decisions |
 | `sampling/`, `source_bridge/` | Frozen seed selection and source-result reproducibility checks |
 | `imports/`, `reclassifications/`, `*_jobs/`, `cnv_cache/` | Staged small results, intermediate files, logs and cache evidence |
@@ -152,6 +170,8 @@ Execution failures, missing files and unsupported classes remain distinct from t
 Repeat the same `run` command to resume. Successful caches are checked against raw output hashes and reparsed; changed inputs, code identities, dependencies or parameters prevent inappropriate reuse. Changed manifests require a new output directory. BAM identities use three 64 KiB samples and file metadata; they do not certify whole-file integrity.
 
 ## Validation status
+
+The 0.4.0 batch update passed **257 local tests with one optional integration skipped**. Public batch import, serial toy-BAM execution, failure continuation, interruption/resume, patient grouping and exact cohort-plot bounds were checked with synthetic inputs. This is software validation, not a patient compatibility result.
 
 The 0.3.0 regression exercises independent upstream calibration, patient-level aggregation, exploratory comparisons, the paired change summary and partial native results. Actual CNVkit 0.9.10 and 0.9.13 completed synthetic BAM tests. Suite 1.5.3 has an audited source lock and local component launch evidence.
 

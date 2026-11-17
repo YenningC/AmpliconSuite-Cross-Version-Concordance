@@ -259,6 +259,9 @@ def _downstream(out, groups, targets, ref, options, group_alpha, mode, synthetic
                        compatibility_metric_scope=native["compatibility_metric_scope"] if native else {"required_metrics": list(AGREEMENT_METRICS)})
             row.update(_label_scope([p for p in target_pairs if p["evaluable"]]))
             row.update(_detection_change_fields(stats_index, target, source))
+            row['observed_statuses'] = sorted({p[k] for p in target_pairs for k in ('status', 'comparator_status')})
+            row['decision_metrics'] = [dict(stat) for metric in AGREEMENT_METRICS
+                if target != source and (stat := _oriented_stat(stats_index, target, source, metric)) is not None]
             for name, _ in SIMILARITIES:
                 metric = "label_discordance" if name == "label_agreement" else name
                 stat = _oriented_stat(stats_index, target, source, metric) if target != source else None
@@ -464,6 +467,7 @@ def _upstream(records, samples, targets, ref, alpha, decision_alpha, minimum, ma
                 retention_difference_n_seeds=sum(r['paired_evaluable_seeds'] for r in local),
                 upstream_loss_margin=margin, min_samples=minimum, decision=decision, reasons=sorted(set(reasons)),
                 calibration_passed=control_passed,
+                observed_statuses=sorted({status for r in local for status in r['status_counts']}),
                 calibration_statuses=sorted({c for r in local for c in r["calibration_statuses"]}),
                 calibration_basis='independent_same_version_source_control',
                 source_control_recipe_match=control_recipe,
@@ -535,18 +539,23 @@ def _combine(downstream, upstream, mode, samples):
     return result
 
 
-def _sample_ladders(out, sample_rows, ref, mode, synthetic):
+def _sample_ladders(out, sample_rows, ref, mode, synthetic, upstream_samples=None):
     import matplotlib.pyplot as plt
     groups = defaultdict(list)
     for row in sample_rows: groups[row["sample_id"], row["analysis_kind"], row["source_version"]].append(row)
     folder = out / "sample_ladders"; folder.mkdir(exist_ok=True)
     indices = []
+    upstream_lookup = {(r['sample_id'], r['source_version'], r['target_version']): r for r in (upstream_samples or [])}
     codes = {"failed": "F", "missing": "M", "unsupported": "U", "invalid": "I", "interrupted": "X",
              "blocked": "B", "no_seeds": "NS", "not_run": "NR"}
     for (sample, kind, source), rows in groups.items():
-        fig, axes = plt.subplots(1, 4, figsize=(13, max(4.0, .38*len(rows)+2.3)), sharey=True)
+        has_upstream = mode == 'with_bam' and kind == 'aa_ac'
+        fig, axes = plt.subplots(1, 5 if has_upstream else 4,
+                                 figsize=(17 if has_upstream else 14, max(4.6, .48*len(rows)+2.6)), sharey=True)
         labels = [r["target_version"] + (" [source]" if r["target_version"] == source else "")
-                  + (" [ref]" if r["target_version"] == ref else "") for r in rows]
+                  + (" [ref]" if r["target_version"] == ref else "")
+                  + f"   {r['n_evaluable_units']}/{r['n_units']} usable"
+                  for r in rows]
         for ax, (metric, label) in zip(axes, SIMILARITIES):
             for y, row in enumerate(rows):
                 value, status = row.get(metric), ""
@@ -569,11 +578,39 @@ def _sample_ladders(out, sample_rows, ref, mode, synthetic):
             ax.set_xlim(-.03, 1.03); ax.set_ylim(len(rows)-.5, -.5)
             ax.set_xticks([0, .5, 1], ["0", "50", "100"]); ax.set_xlabel(label+" (%)")
             ax.grid(axis="x", color="#eeeeee"); ax.set_axisbelow(True)
+        # Counts retain the whole evaluable candidate scope, including regions
+        # without signal. The four plotted similarities use signal-positive units.
+        for y, row in enumerate(rows):
+            axes[0].text(.02, y+.25,
+                f"signal={row['n_signal_units']}  +{row.get('extra_detection', 0)} / -{row.get('missed_detection', 0)}  class={row.get('class_change', 0)}",
+                fontsize=6, color='#666666')
+        if has_upstream:
+            ax = axes[-1]
+            for y, row in enumerate(rows):
+                up = upstream_lookup.get((sample, source, row['target_version']))
+                value = None if not up or up.get('seed_loss') is None else 1-up['seed_loss']
+                partial = bool(up and up['evaluable_seeds'] != up['expected_seeds'])
+                if value is None or partial:
+                    ax.axhspan(y-.33, y+.33, color='#eeeeee', zorder=0)
+                    states = '/'.join(codes.get(s, s) for s in (up.get('status_counts', {}) if up else {}))
+                    ax.text(.5, y, ('PART ' if partial else '') + (states or 'NA'), ha='center', va='center', fontsize=7, color='#666666')
+                else:
+                    ax.scatter(value, y, s=25, color='#4178A9')
+                    ax.text(value-.025 if value > .75 else value+.025, y-.16, f'{100*value:.1f}%',
+                            ha='right' if value > .75 else 'left', fontsize=7)
+                if up:
+                    flags = []
+                    if not up.get('calibration_passed'): flags.append('SRC?')
+                    if not up.get('native_recipe_match'): flags.append('NATIVE?')
+                    ax.text(.02, y+.25, f"{up['evaluable_seeds']}/{up['expected_seeds']} candidates " + ' '.join(flags), fontsize=6, color='#666666')
+            ax.set_xlim(-.03, 1.03); ax.set_ylim(len(rows)-.5, -.5)
+            ax.set_xticks([0, .5, 1], ['0', '50', '100'])
+            ax.set_xlabel('Known candidates retained (%)'); ax.grid(axis='x', color='#eeeeee'); ax.set_axisbelow(True)
         axes[0].set_yticks(range(len(rows)), labels)
         fig.suptitle(f'Sample: {sample} | Input-source comparator: {source} | Fixed reference: {ref}\n'
                      + _kind_label(kind, mode) + " | observed signal-positive input units"
                      + (' | SYNTHETIC TEST DATA' if synthetic else ''), fontsize=10)
-        fig.text(.5, .015, "One sample: observed similarity only; no confidence interval, compatibility probability or equivalence decision. Source diamond = identity.\nGray: F failed, M missing, U unsupported, I invalid, X interrupted, B blocked, NS no seeds, NR not run, PART incomplete, ND/ND both negative, NA unavailable; SRC = input source.\nCLASS*: class support differs or is unknown; shared-class values remain in the table but do not represent complete classification agreement.", ha="center", fontsize=6.5)
+        fig.text(.5, .015, "One sample: observed similarity only; no confidence interval, compatibility probability or equivalence decision. Source diamond = identity.\nGray: F failed, M missing, U unsupported, I invalid, X interrupted, B blocked, NS no seeds, NR not run, PART incomplete, ND/ND both negative, NA unavailable; SRC = input source.\nCounts: usable/expected units; signal units; +extra/-missed detections; class changes. CLASS*: shared classes only. SRC?/NATIVE?: upstream control/recipe unverified.", ha="center", fontsize=6.5)
         fig.tight_layout(rect=[0, .14, 1, 1])
         index = dict(sample_id=sample, analysis_kind=kind, source_version=source, reference_version=ref,
                      comparison_scope=row["comparison_scope"], mode=mode, synthetic=synthetic)
@@ -624,7 +661,7 @@ def _upstream_ladder(out, upstream, ref, mode, synthetic):
     plt.close(fig)
 
 
-def _plots(out, downstream, combined, ref, mode, synthetic, sample_rows=None, upstream=None):
+def _plots(out, downstream, combined, ref, mode, synthetic, sample_rows=None, upstream=None, upstream_samples=None):
     os.environ.setdefault("MPLCONFIGDIR", str(Path(tempfile.gettempdir()) / "ascompare-matplotlib"))
     import matplotlib
     matplotlib.use("Agg")
@@ -684,7 +721,7 @@ def _plots(out, downstream, combined, ref, mode, synthetic, sample_rows=None, up
     for extension in ("png", "pdf", "svg"): fig.savefig(out / f"compatibility_table.{extension}", dpi=170, bbox_inches="tight")
     plt.close(fig)
     _upstream_ladder(out, upstream or [], ref, mode, synthetic)
-    return _sample_ladders(out, sample_rows or [], ref, mode, synthetic)
+    return _sample_ladders(out, sample_rows or [], ref, mode, synthetic, upstream_samples)
 
 
 def _percentage_point_interval(row, name):
@@ -762,6 +799,10 @@ def write_concordance_reports(out, downstream_records, upstream_records, config)
     seeds, upstream_samples, upstream = _upstream(upstream_records, samples, targets, ref, alpha, group_alpha, minimum, margin,
                                                   patient_ids, options.get('primary_pairs'))
     combined = _combine(downstream, upstream, config["mode"], samples)
+    from .concordance_cohort_plot import cohort_metric_rows, plot_cohort_compatibility
+    cohort_rows = cohort_metric_rows(downstream, combined, upstream)
+    for row in cohort_rows: row['synthetic'] = synthetic
+    write_tsv(out / 'cohort_compatibility_metrics.tsv', cohort_rows)
     for filename, table in (("downstream_summary.tsv", downstream), ("sample_similarity.tsv", sample_rows),
                             ("upstream_seeds.tsv", seeds), ("upstream_samples.tsv", upstream_samples),
                             ("upstream_statistics.tsv", upstream), ("compatibility_combined.tsv", combined), ("downstream_report_index.tsv", links)):
@@ -772,17 +813,23 @@ def write_concordance_reports(out, downstream_records, upstream_records, config)
     _json(out / "upstream_records.json", upstream_records)
     plot_error, sample_plots = None, []
     try:
-        figures = _plots(out, downstream, combined, ref, config["mode"], synthetic, sample_rows, upstream)
+        figures = _plots(out, downstream, combined, ref, config["mode"], synthetic, sample_rows, upstream, upstream_samples)
         if isinstance(figures, list): sample_plots = figures
+        plot_cohort_compatibility(out, cohort_rows, ref, config['mode'], synthetic)
     except ImportError as exc: plot_error = str(exc)
     write_tsv(out / "sample_plot_index.tsv", sample_plots)
+    sample_index = ['# Per-sample observed comparisons', '',
+                    f'Fixed reference: {ref}. Single samples do not establish statistical equivalence.', '']
+    sample_index += [f"- {r['sample_id']} / {r['analysis_kind']} / source {r['source_version']}: "
+                     f"[PNG](<{r['png']}>) · [PDF](<{r['pdf']}>) · [SVG](<{r['svg']}>)" for r in sample_plots]
+    (out / 'sample_reports.md').write_text('\n'.join(sample_index)+'\n', encoding='utf-8')
     summary = dict(reference_version=ref, mode=config["mode"], selected_samples=len(samples), target_versions=targets,
                    analysis_kinds=kinds, source_versions=sorted({s["source_version"] for s in samples.values()}),
                    synthetic=synthetic, compatibility_combined=combined,
                    downstream=downstream, upstream=upstream, family_alpha=alpha, allocated_group_alpha=group_alpha,
                    independence_unit=unit, selected_independent_units=len(set(patient_ids.values())) if patient_ids is not None else len(samples),
                    primary_pairs=options.get('primary_pairs'), plot_error=plot_error,
-                   sample_plot_index=sample_plots,
+                   sample_plot_index=sample_plots, cohort_compatibility_metrics=cohort_rows,
                    scope="conditional known-candidate comparison; never complete Suite or genome-wide compatibility",
                    report=str(out / "report.md"))
     _json(out / "summary.json", summary)
@@ -807,8 +854,10 @@ def write_concordance_reports(out, downstream_records, upstream_records, config)
              "", "## 统计与证据边界", "", "先对样本内种子取平均。有患者标识时，对患者内样本取平均并按患者等权。未提供患者标识时按样本等权，前提是样本独立。区间保留零观察失配时的不确定性。各分析分层与上游分配误差预算，主要版本对的判定另作 Bonferroni 校正。探索性比较报告观察差异和区间。",
              "", "容忍阈值未预设、独立样本不足、未知/失败或局部校准未验证时，联合接受结论为证据不足；P>0.05不表示兼容。单样本表只描述观察相似度，不给等效判断。全阴性区域不计为结构一致证据，有信号结果单列。",
              "", "[逐样本相似度](sample_similarity.tsv) · [下游汇总](downstream_summary.tsv) · [上游逐种子](upstream_seeds.tsv) · [上游逐样本](upstream_samples.tsv) · [上游统计](upstream_statistics.tsv) · [联合兼容表](compatibility_combined.tsv)", "",
-             "![版本相似性天梯图](similarity_ladder.png)", "", "![限定范围兼容表](compatibility_table.png)", "", "## 分层详细报告", ""]
-    lines += ["逐样本天梯图见 [完整图索引](sample_plot_index.tsv)：每个样本×分析类型一张，标记输入来源与固定参考；灰色不可评价项不补为零。单样本只显示观察相似度，不给置信区间或等效判断。CLASS* 表示类别支持不同或未知，相关标签与类别区段指标灰显；表中保留 full_label_comparable、共同支持类别及限定类别范围的观察值，不能把它们解释为完整标签100%一致。", ""]
+             "![版本相似性天梯图](similarity_ladder.png)", "", "![整组统计兼容图](cohort_compatibility.png)", "",
+             "整组统计兼容图显示差异大小、区间、预设阈值、独立单位数与联合判定；[绘图数据](cohort_compatibility_metrics.tsv)。主要比较使用与判定相同的多重校正单侧置信界，探索性比较仅显示描述性区间。", "",
+             "![限定范围兼容表](compatibility_table.png)", "", "## 分层详细报告", ""]
+    lines += ["逐样本天梯图见 [全部样本图](sample_reports.md) 和 [TSV索引](sample_plot_index.tsv)：每个样本×分析类型一张，标记输入来源与固定参考；灰色不可评价项不补为零。单样本只显示观察相似度，不给置信区间或等效判断。CLASS* 表示类别支持不同或未知，相关标签与类别区段指标灰显；表中保留 full_label_comparable、共同支持类别及限定类别范围的观察值，不能把它们解释为完整标签100%一致。", ""]
     lines += [f"- {r['sample_id']} / {r['analysis_kind']}：[PNG](<{r['png']}>) · [PDF](<{r['pdf']}>) · [SVG](<{r['svg']}>)" for r in sample_plots[:20]]
     if config["mode"] == "with_bam":
         lines += ["", "![已知候选种子保留率](upstream_retention_ladder.png)", "", "上游图显示候选保留率及独立单位等权区间。SRC?/SRC! 标明来源对照未知或失败，PAIR? 标明配对候选范围不完整，CTRL/NATIVE? 标明受控或未验证配方。", ""]

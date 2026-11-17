@@ -73,8 +73,11 @@ else:
         self.ac.write_text('''import os,pathlib,shutil,sys
 a=sys.argv
 with open(os.environ['SYNTHETIC_TRACE'],'a') as f:f.write('AC\\n')
-rows=pathlib.Path(a[a.index('-i')+1]).read_text().splitlines()
+ac_input=pathlib.Path(a[a.index('-i')+1])
+rows=ac_input.read_text().splitlines()
 assert len(rows)==1 and all(pathlib.Path(p).is_file() for p in rows[0].split()[1:])
+assert ac_input.with_name(ac_input.stem+'_summary_map.txt').read_text().splitlines()==[
+ rows[0].split()[0]+'\\t'+str(ac_input.parent/'aa/reconstruction_summary.txt')]
 prefix=pathlib.Path(a[a.index('-o')+1])
 for p in pathlib.Path('''+repr(str(self.template/'ac'))+''').iterdir():
  if p.is_dir():shutil.copytree(p,prefix.parent/p.name)
@@ -185,7 +188,7 @@ print('BFBArchitect SYNTHETIC integration enabled')
             run_full_suite({'versions':[]},[{'sample_id':'SYNTHETIC','status':'ok'}],{},self.root/'full_suite')
         self.assertFalse((self.root/'full_suite').exists())
 
-    def run_public_workflow(self,name='public',alter_source=False):
+    def run_public_workflow(self,name='public',alter_source=False,n_samples=1):
         if alter_source:
             profile=next((self.source/'ac').glob('*profiles.tsv'))
             profile.write_text(profile.read_text().replace('Cyclic\tPositive\tNone detected','Cyclic\tNone detected\tPositive'))
@@ -199,6 +202,9 @@ print('BFBArchitect SYNTHETIC integration enabled')
             samples=[sample],runtimes=[self.make_runtime('suite-1.6.0'),self.make_runtime('suite-1.6.2')],
             reference=self.config['reference'],io_policy=self.budgets,ac_parameters={'min_size':1,'min_flow':1},
             sampling={'max_seeds':2,'random_seed':42},statistics={'min_samples':20},threads=1)
+        if n_samples > 1:
+            config['samples'] = [dict(copy.deepcopy(sample), sample_id=f'SYNTHETIC_BATCH_{i}',
+                                      patient_id='SYNTHETIC_SHARED_PATIENT') for i in range(n_samples)]
         atomic_json(manifest,config);config,lock,entries=load_manifest(manifest)
         inputs=[self.bam,Path(str(self.bam)+'.bai'),self.normal,Path(str(self.normal)+'.bai'),self.seedfile]
         inputs += [p for p in self.source.rglob('*') if p.is_file()]
@@ -207,11 +213,34 @@ print('BFBArchitect SYNTHETIC integration enabled')
             return [dict(sample_id=sample['sample_id'],seed_id=s['seed_id'],version=runtime['id'],source_version=sample['source_version'],
                 status='retained',retention_fraction=1.,comparison_eligible=True,calibration_status='passed',native_recipe_match=True,
                 matching_rule='SYNTHETIC_TEST_exact_interval',cnvkit_version='SYNTHETIC_CNV_STUB',synthetic=True) for s in sample['seeds']]
+        self.job_order = []
+        def bounded(sample, chosen, runtime, *args):
+            self.job_order.append((sample['sample_id'], runtime['id'], [s['seed_id'] for s in chosen]))
+            return run_bounded_downstream(sample, chosen, runtime, *args)
         with patch('ascompare.concordance.verify_runtime',side_effect=self.make_verified), \
-             patch('ascompare.concordance_cnv.run_local_upstream',side_effect=cnv),patch('ascompare.concordance_report._plots'):
+             patch('ascompare.concordance_cnv.run_local_upstream',side_effect=cnv), \
+             patch('ascompare.concordance.run_bounded_downstream', side_effect=bounded), patch('ascompare.concordance_report._plots'):
             result=run_concordance(config,lock,entries,self.root/name)
         self.assertEqual(before,{str(p):digest(p) for p in inputs})
         return result,self.root/name
+
+    def test_two_sample_with_bam_batch_runs_serially_and_keeps_one_patient_independent(self):
+        result, out = self.run_public_workflow(name='synthetic_batch', n_samples=2)
+        self.assertEqual(self.trace(), ['AA', 'AC'] * 4)
+        self.assertEqual([row[:2] for row in self.job_order], [
+            ('SYNTHETIC_BATCH_0', 'suite-1.6.0'), ('SYNTHETIC_BATCH_0', 'suite-1.6.2'),
+            ('SYNTHETIC_BATCH_1', 'suite-1.6.0'), ('SYNTHETIC_BATCH_1', 'suite-1.6.2')])
+        self.assertEqual(self.job_order[0][2], self.job_order[1][2])
+        self.assertEqual(self.job_order[2][2], self.job_order[3][2])
+        progress = json.loads((out / 'sample_progress.json').read_text())
+        self.assertEqual([r['state'] for r in progress], ['finished', 'finished'])
+        with (out / 'cohort_compatibility_metrics.tsv').open() as handle:
+            rows = [r for r in csv.DictReader(handle, delimiter='\t')
+                    if r['target_version'] == 'suite-1.6.2' and r['stage'] == 'downstream']
+        self.assertEqual(len(rows), 4)
+        self.assertTrue(all(r['n_samples'] == '2' and r['n_independent_units'] == '1' for r in rows))
+        self.assertTrue(all(r['final_decision'] == 'insufficient_evidence' for r in rows))
+        self.assertEqual(result['selected_samples'], 2)
 
     def test_public_with_bam_workflow_keeps_real_bounded_calls_and_shared_seed_pairing(self):
         result,out=self.run_public_workflow()

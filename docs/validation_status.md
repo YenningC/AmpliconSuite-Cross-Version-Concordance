@@ -1,5 +1,15 @@
 # Validation status
 
+## 0.4.0 batch and cohort update
+
+Local regression discovered **258 tests: 257 passed, one optional external-CNVkit integration skipped**. The new public TSV importer was exercised through `import-samples`, `check`, and `run` on three explicitly synthetic samples. A deliberately invalid middle sample remains recorded while the last sample is analyzed. Interruptions, completed-result preservation and manifest identity rejection were tested through the public CLI.
+
+A separate two-sample with-BAM test executes guarded toy AA/AC subprocesses on temporary synthetic BAMs. It verifies serial sample/version order, paired fixed seeds, unchanged original toy inputs, and one independent patient for two linked samples. Component identity verification and CNVkit in that test are explicit synthetic stubs; it does not validate official AA/AC on patient data.
+
+Per-sample figures and the new cohort compatibility figure were generated in PNG/PDF/SVG and visually checked. Plot-table tests check exact existing decision limits, margins, patient counts, source/analysis strata, shared-class annotations, and separation of missing/failed/all-negative observations. The scientific acceptance formulas are unchanged; the existing lower decision bound is now also exported.
+
+The update also includes the native AC summary-map writer with synthetic subprocess and parser tests. Local tests do not establish real-patient cross-version compatibility or successful full reconstruction across all eleven official runtimes. Current-release hosted CI and environment publishing are tracked separately in GitHub Actions; prior release evidence below remains historical.
+
 ## 0.3.0 baseline evidence
 
 The fixed reference is Suite 1.6.2. The 0.3.0 update was developed and tested with synthetic inputs. The local regression suite checks patient clustering, exploratory cohorts, signed paired changes and their direction, an independent source calibration, the reachable upstream exceedance branch, partial amplicons and format-only preflight. Real CNVkit 0.9.10 and 0.9.13 were separately exercised on temporary synthetic BAMs. Suite 1.5.3 source identities were checked against the official image and source locks. Its AA/AC launch and a small local Mosek solver probe passed.

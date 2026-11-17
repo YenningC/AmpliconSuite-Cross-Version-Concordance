@@ -11,6 +11,7 @@ from unittest.mock import patch
 from ascompare.concordance_import import inspect_import_format, import_result, reclassify_result, reclassify_cached, _verify_ac_runtime, _probe_json
 from ascompare.common import atomic_json, digest
 from ascompare.parsing import LABELS
+from ascompare.runner import prepare_ac_input
 from ascompare.versions import _digest
 from test_parsing import add_synthetic_amplicon, write_fixture_run
 
@@ -27,6 +28,10 @@ class ConcordanceImportTests(unittest.TestCase):
         self.script=self.root/'fake_ac.py'
         self.script.write_text('''import pathlib,sys,shutil
 a=sys.argv;out=pathlib.Path(a[a.index('-o')+1]);out.parent.mkdir(exist_ok=True)
+inputfile=pathlib.Path(a[a.index('-i')+1]);sample=inputfile.read_text().split()[0]
+summary_map=inputfile.with_name(inputfile.stem+'_summary_map.txt')
+sample_name,summary=summary_map.read_text().strip().split('\\t')
+assert sample_name==sample and pathlib.Path(summary).is_file()
 for p in pathlib.Path('''+repr(str(self.source/'ac'))+''').iterdir():
  if p.is_dir():shutil.copytree(p,out.parent/p.name)
  else:shutil.copyfile(p,out.parent/p.name)
@@ -188,6 +193,18 @@ print('SYNTHETIC AC completed')
         argv=execution['argv']
         self.assertEqual(argv[argv.index('--min_size')+1],'120000')
         self.assertEqual(argv[argv.index('--min_flow')+1],'3.5')
+
+    def test_native_ac_input_maps_every_amplicon_and_actual_aa_prefix(self):
+        add_synthetic_amplicon(self.source)
+        aa=self.source/'aa'
+        for path in aa.iterdir():
+            path.rename(aa/path.name.replace('reconstruction','renamed.sample'))
+        ac_input=prepare_ac_input(self.source)
+        self.assertEqual(ac_input.read_text().splitlines(), [
+            f'renamed.sample\t{aa}/renamed.sample_amplicon{i}_cycles.txt\t{aa}/renamed.sample_amplicon{i}_graph.txt'
+            for i in (1,2)])
+        self.assertEqual((self.source/'ac_summary_map.txt').read_text(),
+                         f'renamed.sample\t{aa}/renamed.sample_summary.txt\n')
 
     def test_zero_graph_is_not_an_ac_negative(self):
         zero=write_fixture_run(self.root/'zero',count=0);source=self.imported({**self.spec,'run_dir':str(zero)})

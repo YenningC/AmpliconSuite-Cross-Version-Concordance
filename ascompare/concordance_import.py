@@ -18,7 +18,7 @@ from .common import atomic_json, digest, now
 from .full_suite import WHOLE_SAMPLE, private_reference, audit_reference, read_seed_bed
 from .parsing import (LABELS, OutputError, _amplicon_files, _associate_beds, _profile_labels,
                       _profile_rows, _summary_count, aa_amplicon_count, parse_run)
-from .runner import check_ac_runtime, empty_record, execute
+from .runner import check_ac_runtime, empty_record, execute, prepare_ac_input
 from .versions import _check_source, _run
 
 MAX_FILE_BYTES=64*1024**2
@@ -415,23 +415,15 @@ def reclassify_result(source_record, runtime, entry, config, destination):
         if pre.get('status')!='missing' or pre.get('stage')!='ac':
             error=FileNotFoundError if pre.get('status')=='missing' else ValueError
             raise error('Inherited AA reconstruction is incomplete/invalid: '+pre.get('reason',''))
-        if any(re.search(r'\s',str(out/relative)) for _,relative in paths):
-            raise ValueError('AC input paths containing whitespace are unsupported by native input format')
-        stage='ac';env=_ac_environment(runtime)
+        stage='ac';inputfile=prepare_ac_input(out);env=_ac_environment(runtime)
         env.update(AA_DATA_REPO=str(private_reference(reference['aa_data_repo'],out/'reference')),MPLCONFIGDIR=str(out/'mplcache'))
         verified=_verify_ac_runtime(runtime,entry,env);support=verified['supported_labels']
         common['ac_runtime_verified']=True
         common['provenance_kind']='verified_ac_on_inherited_aa'
         atomic_json(out/'runtime_check.json',verified)
-        rows=[]
-        for cycle in sorted((out/'aa').glob('*_amplicon*_cycles.txt')):
-            match=re.fullmatch(r'(.+)_amplicon\d+_cycles\.txt',cycle.name)
-            if not match:raise ValueError('AA cycle filename cannot be mapped to native AC sample prefix')
-            rows.append('\t'.join([match[1],str(cycle),str(cycle.with_name(cycle.name.replace('_cycles.txt','_graph.txt')))]))
-        (out/'ac.input').write_text('\n'.join(rows)+'\n')
         parameters=_ac_parameters(config)
         if any('--'+k not in verified['ac']['help'] for k in parameters):raise ValueError('Locked AC does not support requested classification parameters')
-        command=[str(Path(runtime['ac_python']).absolute()),str(Path(runtime['ac_script']).resolve()),'-i',str(out/'ac.input'),
+        command=[str(Path(runtime['ac_python']).absolute()),str(Path(runtime['ac_script']).resolve()),'-i',str(inputfile),
             '--ref',reference['build'],'-o',str(out/'ac/classification')]
         for key,value in parameters.items():command+=['--'+key,str(value)]
         atomic_json(out/'execution.json',{'created_utc':now(),'argv':command,'analysis_kind':'ac_only','parameters':parameters,
@@ -527,7 +519,7 @@ def _raw_ac_cache_hashes(run):
     """Known raw scientific evidence only, never normalized result.json."""
     run=Path(run)
     paths=[p for p,_ in _artifacts(run/'aa',run/'ac')]
-    for name in ('stages.json','execution.json','runtime_check.json','ac.log','ac/classification.log',
+    for name in ('stages.json','execution.json','runtime_check.json','ac.input','ac_summary_map.txt','ac.log','ac/classification.log',
                  'provenance.json','reference_audit_before.json','reference_audit_after.json'):
         if (run/name).is_file():paths.append(run/name)
     result={}
@@ -586,6 +578,7 @@ def reclassify_cached(source_record,runtime,entry,config,job_dir):
         effective_env={k:v for k,v in env.items() if k not in ('PWD','OLDPWD','SHLVL','_','MPLCONFIGDIR','AA_DATA_REPO')}
         identity={'source_aa_files':hashes,'source_metadata':source_metadata,'target_id':runtime['id'],
             'ac_lock':entry['ac'],'bfb_lock':entry.get('bfb'),'supported_labels':verified['supported_labels'],
+            'ac_input_writer_sha256':digest(Path(__file__).with_name('runner.py')),
             **_runtime_cache_identity(verified),'binaries':binaries,'parameters':_ac_parameters(config),
             'reference_build':reference['build'],'reference_resources':resources,'environment_sha256':_stable_hash(effective_env)}
         signature=_stable_hash(identity)

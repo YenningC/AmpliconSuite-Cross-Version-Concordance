@@ -1,0 +1,12 @@
+{
+  "mode": "results_only",
+  "reference_version": "suite-1.6.2",
+  "target_versions": ["suite-1.6.0", "suite-1.6.2"],
+  "runtimes": [],
+  "statistics": {
+    "primary_pairs": [],
+    "min_samples": 20,
+    "margins": {},
+    "upstream_loss_margin": null
+  }
+}
