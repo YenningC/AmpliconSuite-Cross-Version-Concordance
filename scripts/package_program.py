@@ -47,8 +47,8 @@ def main():
             if p.is_symlink():parser.error('Refusing symlink: '+name)
             files.append(p)
     version=re.search(r'__version__\s*=\s*[\'\"]([^\'\"]+)',(source/'ascompare/__init__.py').read_text()).group(1)
-    prefix='ampliconsuite-benchmarks-'+version+'-github'
-    archive_root='AmpliconSuite-Benchmarks'
+    prefix='ampliconsuite-cross-version-concordance-'+version+'-github'
+    archive_root='AmpliconSuite-Cross-Version-Concordance'
     out.mkdir(parents=True,exist_ok=True)
     names=[prefix+'.zip',prefix+'.tar.gz','release_manifest.json']
     if any((out/name).exists() for name in names):parser.error('Use a new output directory; release files are immutable')
@@ -63,7 +63,7 @@ def main():
                         '--wheel-dir',str(out),str(source)],check=True)
     artifacts={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(out.iterdir())
                if p.is_file() and p.suffix in ('.whl','.zip','.gz')}
-    result=dict(program='AmpliconSuite Benchmarks',version=version,profile='public GitHub source',
+    result=dict(program='AmpliconSuite Cross-Version Concordance',version=version,profile='public GitHub source',
                 archive_root=archive_root,files=manifest,artifacts=artifacts,
                 scope='code, public documentation and synthetic examples; no patient data, private configuration or environments')
     (out/'release_manifest.json').write_text(json.dumps(result,indent=2)+'\n')

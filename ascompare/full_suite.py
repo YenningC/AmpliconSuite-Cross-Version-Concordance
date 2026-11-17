@@ -405,7 +405,7 @@ def partial_seed_evidence(attempt):
 
 def run_full_suite(config, samples, runtimes, out):
     if any(s.get('status') == 'ok' for s in samples):
-        raise ValueError('Whole-genome Suite execution is disabled in AmpliconSuite Benchmarks; use local candidate validation')
+        raise ValueError('Whole-genome Suite execution is disabled in AmpliconSuite Cross-Version Concordance; use local candidate validation')
     out = Path(out).resolve(); out.mkdir(parents=True, exist_ok=True)
     records = []; total = len(samples)*len(config['versions']); done = 0
     for sample in samples:

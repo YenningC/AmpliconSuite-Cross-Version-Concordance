@@ -65,7 +65,7 @@ def prepare_alignment(row, config, staging):
     source = Path(row['alignment'])
     dest = staging / 'input.bam'
     if source.suffix.lower() == '.cram':
-        raise ValueError('Whole-file CRAM conversion is disabled in AmpliconSuite Benchmarks; supply an existing indexed BAM')
+        raise ValueError('Whole-file CRAM conversion is disabled in AmpliconSuite Cross-Version Concordance; supply an existing indexed BAM')
     elif source.suffix.lower() == '.bam':
         dest.symlink_to(source.resolve())
         suffix = '.csi' if row['index'].endswith('.csi') else '.bai'

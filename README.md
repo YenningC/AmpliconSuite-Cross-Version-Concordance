@@ -1,10 +1,10 @@
-# AmpliconSuite Benchmarks
+# AmpliconSuite Cross-Version Concordance
 
-**Cross-version concordance benchmark for selected amplification regions.**
+**Assess how AmpliconSuite results change across versions at selected regions.**
 
 [中文说明](README.zh-CN.md) · [Examples](examples) · [Environment setup](docs/environment_setup.md) · [Statistical methods](docs/statistical_methods.md)
 
-AmpliconSuite Benchmarks is an independent, local research tool. It compares existing AmpliconSuite outputs, orchestrates selected-seed AA/AC runs, and evaluates whether known candidate seeds remain selected after local CNVkit reassessment. It produces per-sample similarity ladders, paired difference tables and compatibility reports.
+AmpliconSuite Cross-Version Concordance is an independent, local research tool. It compares existing AmpliconSuite outputs, orchestrates selected-seed AA/AC runs, and evaluates whether known candidate seeds remain selected after local CNVkit reassessment. It produces per-sample similarity ladders, paired difference tables and compatibility reports.
 
 **Version:** 0.3.0 · **Fixed reference:** Suite **1.6.2**, AA **1.6.r2**, AC **2.0.1**. The reference is frozen; installing a newer upstream release does not change it. This project is not an official AmpliconSuite component.
 
@@ -31,6 +31,8 @@ AmpliconSuite Benchmarks is an independent, local research tool. It compares exi
 Local CNVkit requires an explicit background BED. The default `matched_normal` strategy also requires a matched normal BAM and index. Tumor-only input can explicitly select `local_cnv.reference_mode="flat"`; there is no automatic fallback. Neither flanking sequence nor a flat reference is automatically a valid normal baseline.
 
 ## Quick start
+
+The package is installed as `ampliconsuite-benchmarks` and the command is `asbench`.
 
 Run these commands from the extracted repository root on Linux or macOS:
 

@@ -1,4 +1,4 @@
-"""AmpliconSuite Benchmarks: result-first, bounded, local version comparison."""
+"""AmpliconSuite Cross-Version Concordance: result-first, bounded, local version comparison."""
 import argparse
 import copy
 import hashlib
@@ -507,7 +507,7 @@ def _run_locked(config, lock, entries, out, check_only):
     provenance = out / 'provenance.json'
     if provenance.exists() and json.loads(provenance.read_text())['manifest_hash'] != run_identity:
         raise ValueError('Manifest changed; choose a new output directory')
-    atomic_json(provenance, dict(program='AmpliconSuite Benchmarks', program_version=PROGRAM_VERSION,
+    atomic_json(provenance, dict(program='AmpliconSuite Cross-Version Concordance', program_version=PROGRAM_VERSION,
         created_utc=now(), manifest_hash=run_identity, reference_version=FIXED_REFERENCE,
         mode=config['mode'], whole_genome_bam_operations='prohibited', synthetic=config.get('_synthetic', False)))
     atomic_json(out / 'versions.lock.json', lock)
@@ -731,7 +731,7 @@ def _run_locked(config, lock, entries, out, check_only):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description='AmpliconSuite Benchmarks: existing results, bounded local BAM operations')
+    parser = argparse.ArgumentParser(description='AmpliconSuite Cross-Version Concordance: existing results, bounded local BAM operations')
     parser.add_argument('--version', action='version', version=PROGRAM_VERSION)
     sub = parser.add_subparsers(dest='command', required=True)
     for name in ('check', 'run'):
@@ -782,7 +782,7 @@ def main(argv=None):
             if args.command == 'check' and any(r['status'] != 'ok' for r in
                     result['input_check'] + result['import_format_check']):
                 return 2
-        print('Saved local benchmark: ' + str(Path(args.out).resolve()))
+        print('Saved concordance results: ' + str(Path(args.out).resolve()))
         return 0
     except KeyboardInterrupt:
         print('Interrupted. Completed results retained; repeat command to resume.', file=sys.stderr)

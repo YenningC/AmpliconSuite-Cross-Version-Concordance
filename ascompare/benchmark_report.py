@@ -1,4 +1,4 @@
-"""Reports for conditional AmpliconSuite benchmarks; no BAM execution or export.
+"""Reports for cross-version AmpliconSuite concordance; no BAM execution or export.
 
 Input-source comparisons, fixed-reference comparisons, and AC-only experiments
 remain distinct. Inference uses a patient cluster when supplied, or a sample.
@@ -659,7 +659,7 @@ def _plots(out, downstream, combined, ref, mode, synthetic, sample_rows=None, up
             ax.set_yticks(range(len(rows)), [r["target_version"] for r in rows] if ax is axes[index, 0] else [])
             ax.grid(axis="x", color="#eeeeee"); ax.set_axisbelow(True)
         axes[index, 0].set_title(f'{_kind_label(kind, mode)}\nInput-source version comparator: {source}', loc="left", fontsize=9)
-    fig.suptitle(f'AmpliconSuite Benchmarks | Fixed reference: {ref}\nSource-to-target, signal-positive selected units | {mode}'
+    fig.suptitle(f'AmpliconSuite Cross-Version Concordance | Fixed reference: {ref}\nSource-to-target, signal-positive selected units | {mode}'
                  + (' | SYNTHETIC TEST DATA' if synthetic else ''), fontsize=11)
     confidence = 100*downstream[0]["confidence_level"] if downstream else 95
     unit = downstream[0]['independence_unit'] if downstream else 'sample'
@@ -678,7 +678,7 @@ def _plots(out, downstream, combined, ref, mode, synthetic, sample_rows=None, up
             ax.text(j, i, label.replace(" ", "\n", 1), ha="center", va="center", fontsize=8)
     ax.set_xticks(range(len(targets)), targets, rotation=30, ha="right")
     ax.set_yticks(range(len(groups)), [f'{k}\nsource: {s}' for k, s in groups])
-    ax.set_title(f'Conditional benchmark decisions | Fixed reference: {ref}\n{mode}; AC-only excludes AA; no genome-wide/full-Suite claim'+(' | SYNTHETIC TEST DATA' if synthetic else ''), fontsize=10)
+    ax.set_title(f'Conditional compatibility decisions | Fixed reference: {ref}\n{mode}; AC-only excludes AA; no genome-wide/full-Suite claim'+(' | SYNTHETIC TEST DATA' if synthetic else ''), fontsize=10)
     fig.text(.5, .01, "Missing margins, unavailable results or unverified local calibration prevent a combined compatibility claim. Single-sample similarity is not equivalence.", ha="center", fontsize=7)
     fig.tight_layout(rect=[0, .06, 1, 1])
     for extension in ("png", "pdf", "svg"): fig.savefig(out / f"compatibility_table.{extension}", dpi=170, bbox_inches="tight")
@@ -786,7 +786,7 @@ def write_benchmark_reports(out, downstream_records, upstream_records, config):
                    scope="conditional known-candidate benchmark; never complete Suite or genome-wide compatibility",
                    report=str(out / "report.md"))
     _json(out / "summary.json", summary)
-    lines = ["# AmpliconSuite Benchmarks", "", f"固定参考：**{ref}**；模式：`{config['mode']}`；输入样本：{len(samples)}。",
+    lines = ["# AmpliconSuite Cross-Version Concordance", "", f"固定参考：**{ref}**；模式：`{config['mode']}`；输入样本：{len(samples)}。",
              "", "**人工合成测试数据：不形成患者或生物学结论。**" if synthetic else "这是所提供输入、已知候选区域和已评价指标的条件性比较。", ""]
     if options.get('primary_pairs') == []:
         lines += ["**探索性分析：未指定主要版本对，不作正式兼容判定。**", ""]

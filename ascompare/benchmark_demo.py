@@ -1,4 +1,4 @@
-"""Explicitly synthetic, BAM-free end-to-end AmpliconSuite Benchmarks demo."""
+"""Explicitly synthetic, BAM-free end-to-end AmpliconSuite Cross-Version Concordance demo."""
 from pathlib import Path
 
 from .common import atomic_json
@@ -73,7 +73,7 @@ def write_demo_manifest(directory):
             seeds_bed=str(seed_path.relative_to(root)),source_result=spec(SOURCE_VERSION),
             comparison_results=[dict(version=REFERENCE_VERSION,**spec(REFERENCE_VERSION))]))
     manifest=root/'manifest.json'
-    atomic_json(manifest,dict(program='AmpliconSuite Benchmarks',mode='results_only',synthetic=True,_synthetic=True,
+    atomic_json(manifest,dict(program='AmpliconSuite Cross-Version Concordance',mode='results_only',synthetic=True,_synthetic=True,
         reference_version=REFERENCE_VERSION,target_versions=[REFERENCE_VERSION,SOURCE_VERSION],
         reference={'build':'hg19'},samples=samples,runtimes=[],threads=1,
         statistics={'min_samples':20,'alpha':0.05},

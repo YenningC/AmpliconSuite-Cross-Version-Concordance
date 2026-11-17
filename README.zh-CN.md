@@ -1,4 +1,4 @@
-# AmpliconSuite Benchmarks
+# AmpliconSuite Cross-Version Concordance
 
 [English](README.md) · [示例输入](examples) · [服务器步骤](docs/server_quickstart.md) · [统计方法](docs/statistical_methods.md)
 
@@ -20,6 +20,8 @@
 局部CNVkit需要明确的背景窗口BED。默认 `matched_normal` 还需配对正常BAM及索引；只有肿瘤BAM时，可显式设 `local_cnv.reference_mode="flat"`。程序不会静默切换，邻近区域或平坦参考也不自动等于可靠正常背景。
 
 ## 快速开始
+
+Python 包名为 `ampliconsuite-benchmarks`，运行命令为 `asbench`。
 
 在解压后的仓库根目录运行；当前面向Linux/macOS：
 

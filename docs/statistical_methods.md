@@ -1,6 +1,6 @@
 # 配对比较与初步兼容判定
 
-## 0.3 AmpliconSuite Benchmarks：当前报告口径
+## 0.3 AmpliconSuite Cross-Version Concordance：当前报告口径
 
 提供 `patient_id` 时，每份清单的所有样本都要填写。版本仍按同一样本和候选配对。独立单位均值按种子→样本→患者依次计算，最后以患者等权。省略 `patient_id` 时，程序假定样本独立。下文的样本等权公式在患者模式下应用于患者均值。
 

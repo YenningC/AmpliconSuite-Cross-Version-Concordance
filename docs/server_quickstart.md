@@ -1,4 +1,4 @@
-# 服务器快速开始：AmpliconSuite Benchmarks 0.2
+# 服务器快速开始：AmpliconSuite Cross-Version Concordance
 
 1. 在仓库根目录按README创建并激活Python环境、安装程序，再执行asbench demo检查导入和报告。
 2. 准备已有结果、来源Suite版本和参考版本声明；不要上传患者文件。
