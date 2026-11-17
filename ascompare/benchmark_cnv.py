@@ -388,6 +388,13 @@ def calibrate_source_retention(sample, runtime, rows, out):
     not manufacture historical input identity from today's files. Its endpoint
     is only reproduction of supplied source candidates, not global CN accuracy.
     """
+    if runtime['id'] != sample.get('source_version'):
+        for row in rows:
+            row.update(calibration_role='candidate_observation', calibration_status='unverified',
+                       calibration_reason='Candidate retention is an observation; calibration is assessed on the independent source-version replay')
+        return rows
+    for row in rows:
+        row['calibration_role'] = 'source_control'
     required = ('baseline_cns', 'source_seed_bed', 'baseline_provenance')
     evidence = dict(scope='selected_source_candidate_retention_only', status='unverified',
                     required_source_files=list(required),
@@ -474,6 +481,7 @@ def run_local_upstream(sample, runtime, entry, config, out):
     mapped = load_builtin_map()['versions'].get(target_version, {})
     base = dict(sample_id=sample['sample_id'], version=target_version, source_version=source_version,
                 cnvkit_version=runtime.get('cnvkit_version'), endpoint='local_candidate_retention',
+                calibration_role='source_control' if target_version == source_version else 'candidate_observation',
                 calibration_status='unverified',
                 calibration_reason='No matched same-CNVkit, same-input whole-genome calibration evidence has been evaluated; local bins, centering and segmentation context differ',
                 matching_rule='union_overlap_bp / original_seed_bp >= configured min_seed_overlap',

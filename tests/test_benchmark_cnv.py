@@ -149,6 +149,7 @@ class BoundedLocalCnvTests(unittest.TestCase):
         self.assertFalse(self.run_mock('changed_policy')[0]['cnv_cache_hit'])
 
     def test_calibration_boolean_cannot_create_validation(self):
+        self.sample['source_version'] = self.runtime['id']
         self.config['local_cnv']['calibrated'] = True
         self.config['local_cnv']['calibration_status'] = 'verified'
         result = self.run_mock()[0]
@@ -187,8 +188,9 @@ class BoundedLocalCnvTests(unittest.TestCase):
 
     def test_native_recipe_mapping_is_not_controlled_0914(self):
         mapped = cnv.load_builtin_map()['versions']
-        self.assertEqual(len(mapped), 10)
+        self.assertEqual(len(mapped), 11)
         self.assertEqual(mapped['suite-1.3.4']['cnvkit_version'], '0.9.10')
+        self.assertEqual(mapped['suite-1.5.3']['cnvkit_version'], '0.9.13')
         self.assertEqual(mapped['suite-1.6.2']['cnvkit_version'], '0.9.13')
         result = self.run_mock(runtime=dict(self.runtime, cnvkit_version='0.9.14'))[0]
         self.assertFalse(result['native_recipe_match'])
@@ -225,6 +227,7 @@ class BoundedLocalCnvTests(unittest.TestCase):
         self.assertFalse((self.root / 'commands-0.9.10.json').exists())
 
     def test_calibration_requires_original_input_and_output_identity(self):
+        self.sample['source_version'] = self.runtime['id']
         cns, seeds, metadata = (self.root / p for p in ('original.cns', 'original.bed', 'original_run.json'))
         cns.write_text('chromosome\tstart\tend\tlog2\nchr1\t10000\t20000\t2\n')
         seeds.write_text('chr1\t10000\t20000\n')
@@ -236,7 +239,14 @@ class BoundedLocalCnvTests(unittest.TestCase):
                            source_cnvkit_version='0.9.13')
         result = self.run_mock('matched')[0]
         self.assertEqual(result['calibration_status'], 'passed')
+        self.assertEqual(result['calibration_role'], 'source_control')
         self.assertEqual(result['calibration_scope'], 'selected_source_candidate_retention_only')
+        candidate = dict(self.runtime, id='suite-1.6.1')
+        observation = self.run_mock('candidate', candidate)[0]
+        self.assertEqual(observation['status'], 'retained')
+        self.assertEqual(observation['calibration_status'], 'unverified')
+        self.assertEqual(observation['calibration_role'], 'candidate_observation')
+        self.assertFalse((self.root / 'candidate/calibration_evidence.json').exists())
         original['inputs']['alignment']['bytes'] += 1
         metadata.write_text(json.dumps(original))
         self.assertEqual(self.run_mock('mismatch')[0]['calibration_status'], 'unverified')

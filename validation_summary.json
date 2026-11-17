@@ -1,146 +1,216 @@
 {
-  "program": "AmpliconSuite Benchmarks",
-  "program_version": "0.2.0",
   "date": "2026-11-17",
+  "program_version": "0.3.0",
   "reference_version": "suite-1.6.2",
-  "fixed_components": {
-    "AA": "1.6.r2",
-    "AC": "2.0.1"
-  },
-  "formal_suite_versions": 10,
-  "unit_tests": {
-    "discovered": 219,
-    "passed": 218,
+  "formal_suite_versions": 11,
+  "regression_tests": {
+    "discovered": 232,
+    "passed": 231,
     "skipped": 1,
     "failed": 0,
-    "skipped_reason": "Optional actual CNVkit test requires explicit environment; four separate actual runs are recorded below",
-    "log_sha256": "092f77575a65c6029eccbf0501c6c103a70f57f2eac1066a3a1cfe49f8fd06eb"
+    "log_sha256": "38de1e4a8283ee52422eca7d4b023aed7a01ea9737dbc948a68f504dbcb453ac"
   },
-  "wheel_install_test": {
+  "installed_wheel": {
     "passed": true,
+    "commands_passed": 9,
     "outside_source_directory": true,
-    "commands_passed": 8,
-    "scope": "new venv; scientific dependencies explicitly reused by .pth; not clean Linux deployment",
-    "synthetic_only": true,
-    "tested_wheel_sha256": "e98ed1e1e794d544a921217b0ce60580c1f084a4419fd9d8ef99fadd94bd07f5",
-    "evidence_sha256": "ef3bd8aac400b9bf9bffe6343d530a1e5f54c02d07a258087860fc1acf8c1eeb"
+    "scope": "Isolated venv with explicitly reused scientific dependencies",
+    "sha256": "9a94e03d6c3b3e4b954abf47326f70e70f5c631348b76c78aec3959e9528f0ed"
   },
-  "report_environment": {
-    "python": "3.12.14",
-    "packages": {
-      "numpy": "2.3.5",
-      "scipy": "1.18.1",
-      "matplotlib": "3.11.2",
-      "pysam": "0.24.1"
-    }
+  "synthetic_demo": {
+    "public_cli": true,
+    "report_sha256": "0e7b375a77ee7b9d190f8147aea901f261d1fbc4fab219848dcd87aee7570293",
+    "patient_data_used": false
   },
   "actual_cnvkit_synthetic_tests": [
     {
       "version": "0.9.10",
       "reference_mode": "matched_normal",
       "passed": true,
-      "scope": "actual finite synthetic coverage/reference/fix/CBS; not patient seed filtering or AA reconstruction",
-      "evidence_sha256": "01c79d43d7d786b3904115e6d566c34ace0584aa5d11d656946cd987b0f24e56",
-      "log_sha256": "f02e77a4e45fca68a761efa3eb8d5b53f218586400035e1b4f3f596f3400d9a6"
+      "guarded_processes": 7,
+      "blocked": 0,
+      "requested_tumor_bp": 41000,
+      "requested_normal_bp": 59000,
+      "stages": [
+        "coverage",
+        "reference",
+        "fix",
+        "CBS"
+      ],
+      "source": "Existing independent exact-version Python environment; temporary synthetic reference and BAM"
     },
     {
       "version": "0.9.13",
       "reference_mode": "matched_normal",
       "passed": true,
-      "scope": "actual finite synthetic coverage/reference/fix/CBS; not patient seed filtering or AA reconstruction",
-      "evidence_sha256": "ed06463f941cb83add1b1a78f2d82a067bed6a980c10db900b355f245303e04b",
-      "log_sha256": "05615cafab5cb02d6526241286be867a6336b7d02bce76278ac0f268066a53ca"
-    },
-    {
-      "version": "0.9.13",
-      "reference_mode": "flat",
-      "passed": true,
-      "scope": "actual finite synthetic coverage/reference/fix/CBS; not patient seed filtering or AA reconstruction",
-      "evidence_sha256": "744877719a6ea739b32e5eef7f0921a80bdfc054525c03c089af237dd48df08e",
-      "log_sha256": "ba4f9bf23e50cb693dde4578e7779bf83c43438e3b803cbc7852687425c49f3b"
-    },
-    {
-      "version": "0.9.14",
-      "reference_mode": "matched_normal",
-      "passed": true,
-      "scope": "actual finite synthetic coverage/reference/fix/CBS; not patient seed filtering or AA reconstruction",
-      "evidence_sha256": "b53f9bc21da34164b8b2b9092d270d803c9c8e4e0cc0747a1fb159a0c9a4585f",
-      "log_sha256": "a366468e3a88600821757b053035e5657335457afe143fa7be26a9999f8dd1f6"
+      "guarded_processes": 7,
+      "blocked": 0,
+      "requested_tumor_bp": 41000,
+      "requested_normal_bp": 59000,
+      "stages": [
+        "coverage",
+        "reference",
+        "fix",
+        "CBS"
+      ],
+      "source": "Existing independent exact-version Python environment; temporary synthetic reference and BAM"
     }
   ],
-  "actual_ac_dependency_probes": [
-    {
-      "id": "suite-1.6.0",
-      "ac_version": "2.0.0",
-      "bfb_version": "1.0.1",
-      "selected_backend": "gurobi",
-      "cbc_returncode": 0,
-      "status": "passed"
-    },
-    {
-      "id": "suite-1.6.2",
-      "ac_version": "2.0.1",
-      "bfb_version": "1.0.2",
-      "selected_backend": "gurobi",
-      "cbc_returncode": 0,
-      "status": "passed"
-    }
-  ],
-  "actual_ac_dependency_probe_evidence_sha256": "e75fb6d42f61526c2a0f6eeaf0574537ad1138a0f8f0f77d7c3520b5866219d0",
-  "synthetic_demo": {
-    "samples": 3,
-    "existing_result_versions": [
-      "suite-1.6.0",
-      "suite-1.6.2"
-    ],
-    "public_cli": true,
-    "patient_data_used": false,
-    "AA_executed": false,
-    "AC_executed": false,
-    "plots_visually_checked": true
+  "suite_1_5_3": {
+    "source_lock_verified": true,
+    "aa": "1.5.r7",
+    "ac": "1.5.2",
+    "cnvkit_recipe": "0.9.13",
+    "aa_ac_launch_probe_passed": true,
+    "small_mosek_probe_passed": true,
+    "full_sample_run": false
   },
-  "current_scope_validation": {
-    "new_patient_runs": 0,
-    "bounded_actual_patient_AA_reconstruction_complete": false,
-    "native_historical_seed_filter_patient_validation_complete": false,
-    "new_local_workflow_patient_compatibility": "not_evaluated",
-    "clean_linux_deployment_test": false
-  },
-  "official_comparators": {
-    "status": "retained independent adapters; prior synthetic validation",
-    "automatic_asbench_integration": false,
-    "score_is_compatibility_threshold": false
-  },
-  "release_scope": "Program, tests, documentation and synthetic examples only. No patient inputs/results, license or runtime environments.",
-  "publication_note": "Aggregate software and synthetic-component validation only; no patient results are distributed. Original evidence hashes retained.",
-  "github_distribution_verification": {
-    "date": "2026-11-17",
+  "patient_aa_ac_run_complete": false,
+  "hosted_linux_ci_0_3_0_verified": false,
+  "previous_release_0_2_0": {
+    "program": "AmpliconSuite Benchmarks",
     "program_version": "0.2.0",
-    "distribution": "GitHub source package",
-    "regression_tests": {
+    "date": "2026-11-17",
+    "reference_version": "suite-1.6.2",
+    "fixed_components": {
+      "AA": "1.6.r2",
+      "AC": "2.0.1"
+    },
+    "formal_suite_versions": 10,
+    "unit_tests": {
       "discovered": 219,
       "passed": 218,
       "skipped": 1,
       "failed": 0,
-      "log_sha256": "ce70494284ec8a60a1bd05ba1e4c998b8085155618d901b576f6fd1ebd44cf62"
+      "skipped_reason": "Optional actual CNVkit test requires explicit environment; four separate actual runs are recorded below",
+      "log_sha256": "092f77575a65c6029eccbf0501c6c103a70f57f2eac1066a3a1cfe49f8fd06eb"
     },
-    "installation": {
+    "wheel_install_test": {
       "passed": true,
-      "commands_passed": 8,
-      "wheel_sha256": "a5dfad76920133c492c828ba4bec5086a4dd19bc0ee75322935e99e8be5215b4",
-      "evidence_sha256": "dab64463137ebc896ff8068ec2026e5eeade62dd17b45076aa19f89eab7e29ac",
       "outside_source_directory": true,
-      "scope": "new venv outside source directory; scientific dependencies explicitly reused by .pth"
+      "commands_passed": 8,
+      "scope": "new venv; scientific dependencies explicitly reused by .pth; not clean Linux deployment",
+      "synthetic_only": true,
+      "tested_wheel_sha256": "e98ed1e1e794d544a921217b0ce60580c1f084a4419fd9d8ef99fadd94bd07f5",
+      "evidence_sha256": "ef3bd8aac400b9bf9bffe6343d530a1e5f54c02d07a258087860fc1acf8c1eeb"
     },
-    "document_links": {
-      "checked": 45,
-      "broken": 0
+    "report_environment": {
+      "python": "3.12.14",
+      "packages": {
+        "numpy": "2.3.5",
+        "scipy": "1.18.1",
+        "matplotlib": "3.11.2",
+        "pysam": "0.24.1"
+      }
     },
-    "scientific_python_implementation_unchanged": true,
-    "locked_component_versions_commits_and_hashes_unchanged": true,
-    "source_lock_descriptive_notes": "Generalized internal provenance comments and removed deployment-specific status notes; component identities unchanged",
-    "ci_configuration_included": true,
-    "github_hosted_ci_executed": false,
-    "scope": "Software and synthetic validation only; no new patient analysis or compatibility conclusion"
+    "actual_cnvkit_synthetic_tests": [
+      {
+        "version": "0.9.10",
+        "reference_mode": "matched_normal",
+        "passed": true,
+        "scope": "actual finite synthetic coverage/reference/fix/CBS; not patient seed filtering or AA reconstruction",
+        "evidence_sha256": "01c79d43d7d786b3904115e6d566c34ace0584aa5d11d656946cd987b0f24e56",
+        "log_sha256": "f02e77a4e45fca68a761efa3eb8d5b53f218586400035e1b4f3f596f3400d9a6"
+      },
+      {
+        "version": "0.9.13",
+        "reference_mode": "matched_normal",
+        "passed": true,
+        "scope": "actual finite synthetic coverage/reference/fix/CBS; not patient seed filtering or AA reconstruction",
+        "evidence_sha256": "ed06463f941cb83add1b1a78f2d82a067bed6a980c10db900b355f245303e04b",
+        "log_sha256": "05615cafab5cb02d6526241286be867a6336b7d02bce76278ac0f268066a53ca"
+      },
+      {
+        "version": "0.9.13",
+        "reference_mode": "flat",
+        "passed": true,
+        "scope": "actual finite synthetic coverage/reference/fix/CBS; not patient seed filtering or AA reconstruction",
+        "evidence_sha256": "744877719a6ea739b32e5eef7f0921a80bdfc054525c03c089af237dd48df08e",
+        "log_sha256": "ba4f9bf23e50cb693dde4578e7779bf83c43438e3b803cbc7852687425c49f3b"
+      },
+      {
+        "version": "0.9.14",
+        "reference_mode": "matched_normal",
+        "passed": true,
+        "scope": "actual finite synthetic coverage/reference/fix/CBS; not patient seed filtering or AA reconstruction",
+        "evidence_sha256": "b53f9bc21da34164b8b2b9092d270d803c9c8e4e0cc0747a1fb159a0c9a4585f",
+        "log_sha256": "a366468e3a88600821757b053035e5657335457afe143fa7be26a9999f8dd1f6"
+      }
+    ],
+    "actual_ac_dependency_probes": [
+      {
+        "id": "suite-1.6.0",
+        "ac_version": "2.0.0",
+        "bfb_version": "1.0.1",
+        "selected_backend": "gurobi",
+        "cbc_returncode": 0,
+        "status": "passed"
+      },
+      {
+        "id": "suite-1.6.2",
+        "ac_version": "2.0.1",
+        "bfb_version": "1.0.2",
+        "selected_backend": "gurobi",
+        "cbc_returncode": 0,
+        "status": "passed"
+      }
+    ],
+    "actual_ac_dependency_probe_evidence_sha256": "e75fb6d42f61526c2a0f6eeaf0574537ad1138a0f8f0f77d7c3520b5866219d0",
+    "synthetic_demo": {
+      "samples": 3,
+      "existing_result_versions": [
+        "suite-1.6.0",
+        "suite-1.6.2"
+      ],
+      "public_cli": true,
+      "patient_data_used": false,
+      "AA_executed": false,
+      "AC_executed": false,
+      "plots_visually_checked": true
+    },
+    "current_scope_validation": {
+      "new_patient_runs": 0,
+      "bounded_actual_patient_AA_reconstruction_complete": false,
+      "native_historical_seed_filter_patient_validation_complete": false,
+      "new_local_workflow_patient_compatibility": "not_evaluated",
+      "clean_linux_deployment_test": false
+    },
+    "official_comparators": {
+      "status": "retained independent adapters; prior synthetic validation",
+      "automatic_asbench_integration": false,
+      "score_is_compatibility_threshold": false
+    },
+    "release_scope": "Program, tests, documentation and synthetic examples only. No patient inputs/results, license or runtime environments.",
+    "publication_note": "Aggregate software and synthetic-component validation only; no patient results are distributed. Original evidence hashes retained.",
+    "github_distribution_verification": {
+      "date": "2026-11-17",
+      "program_version": "0.2.0",
+      "distribution": "GitHub source package",
+      "regression_tests": {
+        "discovered": 219,
+        "passed": 218,
+        "skipped": 1,
+        "failed": 0,
+        "log_sha256": "ce70494284ec8a60a1bd05ba1e4c998b8085155618d901b576f6fd1ebd44cf62"
+      },
+      "installation": {
+        "passed": true,
+        "commands_passed": 8,
+        "wheel_sha256": "a5dfad76920133c492c828ba4bec5086a4dd19bc0ee75322935e99e8be5215b4",
+        "evidence_sha256": "dab64463137ebc896ff8068ec2026e5eeade62dd17b45076aa19f89eab7e29ac",
+        "outside_source_directory": true,
+        "scope": "new venv outside source directory; scientific dependencies explicitly reused by .pth"
+      },
+      "document_links": {
+        "checked": 45,
+        "broken": 0
+      },
+      "scientific_python_implementation_unchanged": true,
+      "locked_component_versions_commits_and_hashes_unchanged": true,
+      "source_lock_descriptive_notes": "Generalized internal provenance comments and removed deployment-specific status notes; component identities unchanged",
+      "ci_configuration_included": true,
+      "github_hosted_ci_executed": false,
+      "scope": "Software and synthetic validation only; no new patient analysis or compatibility conclusion"
+    }
   }
 }

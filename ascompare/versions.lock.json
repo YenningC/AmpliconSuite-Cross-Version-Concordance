@@ -2,7 +2,7 @@
   "schema_version": 1,
   "frozen_on": "2026-11-17",
   "reference_version": "suite-1.6.2",
-  "selection_policy": "Source-pinned official Suite releases and separately identified historical diagnostic combinations. AmpliconSuite Benchmarks 0.2 uses only existing-result comparisons, fixed-source-AA AC reclassification, or bounded local candidate CNVkit plus selected-seed AA+AC. Whole-genome BAM workflows are disabled. CNVkit recipe mapping is in builtin_cnvkit_map.json and actual installed versions are independently verified; source tags do not prove runtime identity.",
+  "selection_policy": "Source-pinned official Suite releases and separately identified historical diagnostic combinations. AmpliconSuite Benchmarks uses only existing-result comparisons, fixed-source-AA AC reclassification, or bounded local candidate CNVkit plus selected-seed AA+AC. Whole-genome BAM workflows are disabled. CNVkit recipe mapping is in builtin_cnvkit_map.json and actual installed versions are independently verified; source tags do not prove runtime identity.",
   "versions": [
     {
       "id": "aa-1.3.r2-ac-1.2.1",
@@ -331,6 +331,60 @@
       "evidence_urls": [
         "https://github.com/AmpliconSuite/AmpliconSuite-pipeline/releases/tag/v1.5.2"
       ]
+    },
+    {
+      "id": "suite-1.5.3",
+      "suite": {
+        "repo": "https://github.com/AmpliconSuite/AmpliconSuite-pipeline",
+        "entrypoint": "AmpliconSuite-pipeline.py",
+        "tag": "v1.5.3",
+        "version": "1.5.3",
+        "commit": "3820e75013109c59147383cae49a1ee26ad51428",
+        "archive_sha256": "9f0c292068790eabc9d851e33f16c32a0cd08f4452087b0278fe9a8b2aeaccde",
+        "manifest_sha256": "59a3d5343aed5a563d94bc254921d44e43d926c25e02b990f8a8cdc7182ccb88"
+      },
+      "aa": {
+        "repo": "https://github.com/AmpliconSuite/AmpliconArchitect",
+        "entrypoint": "src/AmpliconArchitect.py",
+        "tag": "v1.5.r7",
+        "version": "1.5.r7",
+        "commit": "cc84a765c688c9d2d5a77f58afd89a6161dae038",
+        "archive_sha256": "fde42c289463c786c242ee9960219fcd429290f480c92beafd8fac50ab161547",
+        "manifest_sha256": "cc05ac9f31ff7691db4b569542de7bf24c0f746f190d39989301d0a1c4b8b910"
+      },
+      "ac": {
+        "repo": "https://github.com/AmpliconSuite/AmpliconClassifier",
+        "tag": "v1.5.2",
+        "version": "1.5.2",
+        "commit": "b8a0abf1d4ef144ac8ba333052b376db503374e6",
+        "entrypoint": "amplicon_classifier.py",
+        "archive_sha256": "b2291196db65cc8dffc3f8d5dabef6d24a818a2872cf9977be793dc69f8cf17a",
+        "manifest_sha256": "33471e6e54b7bdd29df3490ff9a4de49fb5646ace120f1c7465b6db07dec6ede"
+      },
+      "selection_reason": "CNVkit 0.9.13 transition and AA 1.5.r7 update. AA and AC pairing verified from source ZIP layers in the published Suite image.",
+      "supported_classes": [
+        "ecDNA",
+        "BFB",
+        "Complex-non-cyclic",
+        "Linear"
+      ],
+      "source_status": "downloaded_verified",
+      "runtime_status": "not_distributed_verify_on_target_system",
+      "evidence_urls": [
+        "https://github.com/AmpliconSuite/AmpliconSuite-pipeline/releases/tag/v1.5.3",
+        "https://github.com/AmpliconSuite/AmpliconArchitect/releases/tag/v1.5.r7",
+        "https://github.com/AmpliconSuite/AmpliconClassifier/releases/tag/v1.5.2",
+        "https://hub.docker.com/r/jluebeck/ampliconsuite-pipeline/tags?name=v1.5.3"
+      ],
+      "published_image_source_evidence": {
+        "image": "docker.io/jluebeck/ampliconsuite-pipeline:v1.5.3",
+        "manifest_digest": "sha256:5442650a0e2c8ed036a2c4f29d3ceba564c20383d4467b5dcffeb003922c71eb",
+        "source_zip_layer_digests": {
+          "suite": "sha256:914ab37879e1a061fa3e21f0851357bc3b3cdb304b45446544cd08eaf5945db7",
+          "aa": "sha256:16311e6599394856fd8e80580ecc8b8452786c49c675d0aaf96d950583afdf25",
+          "ac": "sha256:76d500187a2c7cc73331e95b82dcfd59c6143f15a103127af987ed9d02eeec55"
+        }
+      }
     },
     {
       "id": "suite-1.6.0",

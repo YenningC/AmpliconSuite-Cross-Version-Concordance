@@ -1,14 +1,28 @@
 #!/usr/bin/env python3
-"""Fetch only locked public sources. No patient files are used."""
+"""Fetch only locked public sources. Installed equivalent: asbench prepare-panel."""
 import argparse
-import json
 from pathlib import Path
-from ascompare.versions import load_lock, prepare_sources
-p=argparse.ArgumentParser(description=__doc__)
-p.add_argument('--out',type=Path,required=True)
-p.add_argument('--lock',type=Path)
-a=p.parse_args();lock=load_lock(a.lock);results=[]
-for entry in lock['versions']:
-    print('Preparing '+entry['id'],flush=True)
-    results.append(prepare_sources(entry,a.out))
-(a.out/'prepared_panel.json').write_text(json.dumps({'reference_version':lock['reference_version'],'sources':results},indent=2)+'\n')
+import sys
+
+# For direct use from a source checkout, import that checkout rather than relying
+# on the caller's PYTHONPATH or the executable's scripts/ import path.
+if __package__ in (None, ''):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from ascompare.versions import prepare_panel
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--out', type=Path, required=True)
+    parser.add_argument('--versions', nargs='+')
+    parser.add_argument('--lock', type=Path)
+    args = parser.parse_args()
+    try:
+        print('Saved ' + str(prepare_panel(args.out, args.versions, args.lock)))
+    except (OSError, ValueError) as exc:
+        parser.error(str(exc))
+
+
+if __name__ == '__main__':
+    main()

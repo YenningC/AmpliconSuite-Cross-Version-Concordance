@@ -8,11 +8,11 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from ascompare.benchmark_import import import_result, reclassify_result, reclassify_cached, _verify_ac_runtime, _probe_json
+from ascompare.benchmark_import import inspect_import_format, import_result, reclassify_result, reclassify_cached, _verify_ac_runtime, _probe_json
 from ascompare.common import atomic_json, digest
 from ascompare.parsing import LABELS
 from ascompare.versions import _digest
-from test_parsing import write_fixture_run
+from test_parsing import add_synthetic_amplicon, write_fixture_run
 
 
 class BenchmarkImportTests(unittest.TestCase):
@@ -110,6 +110,49 @@ print('SYNTHETIC AC completed')
         self.assertTrue(all('returncode' not in x for x in stages.values()))
         spec['stages_json']=str(self.root/'missing_stages.json')
         self.assertEqual(self.imported(spec,name='missing_stages')['status'],'missing')
+
+    def test_read_only_preflight_reports_profile_and_local_missing_artifact(self):
+        add_synthetic_amplicon(self.source, 'Cyclic')
+        (self.source/'aa/reconstruction_amplicon2_cycles.txt').unlink()
+        bam=self.source/'aa/protected.bam';bam.write_bytes(b'Unselected file')
+        before={p:digest(p) for p in self.source.rglob('*') if p.is_file()}
+        original_open=Path.open
+
+        def checked_open(path, *args, **kwargs):
+            if path.name.endswith(('_graph.txt', '_cycles.txt', '_intervals.bed', '.bam')):
+                raise AssertionError('Preflight must not open graph, cycle, BED, or BAM bodies')
+            return original_open(path, *args, **kwargs)
+
+        with patch.object(Path, 'open', checked_open):
+            inspected=inspect_import_format(self.spec, LABELS)
+        self.assertEqual((inspected['status'], inspected['summary_amplicons'], inspected['matched_amplicons']), ('partial', 2, 1))
+        self.assertEqual(inspected['profile_rows'], 2)
+        self.assertIn('FAN+', inspected['profile_columns'])
+        self.assertTrue(any(i.get('amplicon_id') == 'amplicon2' and i['stage'] == 'aa' for i in inspected['issues']))
+        self.assertEqual(before, {p:digest(p) for p in self.source.rglob('*') if p.is_file()})
+        record=self.imported()
+        self.assertEqual((record['coverage_status'], record['labels'], record['comparison_eligible']), ('partial', ['ecDNA'], False))
+
+    def test_native_feature_map_verifies_renamed_ac_prefix_without_opening_original_paths(self):
+        profile=next((self.source/'ac').glob('*profiles.tsv'))
+        profile.write_text(profile.read_text().replace('reconstruction', 'native_sample'))
+        bed=next((self.source/'ac').glob('*_bed_files/*.bed'))
+        renamed=bed.with_name(bed.name.replace('reconstruction','native_sample'))
+        bed.rename(renamed)
+        without_map=self.imported(name='no_map')
+        self.assertFalse(without_map['comparison_eligible'])
+        self.assertEqual(inspect_import_format(self.spec, LABELS)['matched_amplicons'], 0)
+        mapping=self.source/'ac/classification_features_to_graph.txt'
+        mapping.write_text(f'/unmounted/output/{renamed.name}\t/unmounted/results/reconstruction_amplicon1_graph.txt\n')
+        self.assertEqual(inspect_import_format(self.spec, LABELS)['matched_amplicons'], 1)
+        result=self.imported()
+        self.assertTrue(result['comparison_eligible'])
+        self.assertEqual(result['labels'], ['ecDNA'])
+        self.assertIn('ac/classification_features_to_graph.txt', {item['relative_path'] for item in result['input_artifacts']})
+        mapping.write_text(mapping.read_text().replace('amplicon1_graph','amplicon2_graph'))
+        invalid=self.imported(name='mismatched_map')
+        self.assertFalse(invalid['comparison_eligible'])
+        self.assertIn('feature-to-graph mapping', invalid['reason'])
 
     def test_symlink_cannot_smuggle_unselected_data(self):
         target=self.source/'aa/not_an_artifact.bam';target.write_bytes(b'protected')

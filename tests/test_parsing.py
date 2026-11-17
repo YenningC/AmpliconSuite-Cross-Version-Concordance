@@ -33,6 +33,20 @@ def write_fixture_run(path, labels=("ecDNA",), kind="Cyclic", count=1, modern=Tr
     return path
 
 
+def add_synthetic_amplicon(path, kind="No amp/Invalid"):
+    """Append an AA graph and AC row that may be negative, invalid, or lack its positive BED."""
+    (path / "aa/reconstruction_summary.txt").write_text("#Amplicons = 2\n")
+    for suffix in ("graph", "cycles"):
+        text = (path / f"aa/reconstruction_amplicon1_{suffix}.txt").read_text()
+        (path / f"aa/reconstruction_amplicon2_{suffix}.txt").write_text(text.replace("chr1", "chr3"))
+    profile = next((path / "ac").glob("*profiles.tsv"))
+    flags = ["Positive" if kind == "Cyclic" else "None detected", "None detected"]
+    if "FAN+" in profile.read_text().splitlines()[0]:
+        flags.append("None detected")
+    with profile.open("a") as handle:
+        handle.write("\t".join(["reconstruction", "amplicon2", kind, *flags]) + "\n")
+
+
 class ParserTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -86,6 +100,31 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(record["status"], "invalid")
         self.assertIsNone(record["detected"])
         self.assertEqual(record["category_status"]["FAN"], "unsupported")
+
+    def test_legacy_invalid_amplicon_keeps_other_valid_calls_as_partial_observations(self):
+        write_fixture_run(self.root, modern=False)
+        add_synthetic_amplicon(self.root)
+        record = self.parse([x for x in LABELS if x != "FAN"])
+        self.assertEqual((record['status'], record['coverage_status']), ('invalid', 'partial'))
+        self.assertIsNone(record['detected'])
+        self.assertEqual((record['evaluable_amplicon_count'], record['unevaluable_amplicon_count']), (1, 1))
+        self.assertEqual([(a['amplicon_id'], a['status']) for a in record['amplicons']],
+                         [('amplicon1', 'ok'), ('amplicon2', 'invalid')])
+        self.assertEqual(record['features'][0]['label'], 'ecDNA')
+        self.assertEqual(record['category_status']['BFB'], 'unavailable')
+
+    def test_missing_cycle_or_positive_feature_preserves_other_amplicon(self):
+        write_fixture_run(self.root)
+        add_synthetic_amplicon(self.root, 'Cyclic')
+        record = self.parse()
+        self.assertEqual((record['status'], record['stage'], record['coverage_status']), ('missing', 'ac', 'partial'))
+        self.assertEqual(record['amplicons'][0]['status'], 'ok')
+        self.assertIn('feature BED', record['amplicons'][1]['reason'])
+        (self.root / 'aa/reconstruction_amplicon2_cycles.txt').unlink()
+        record = self.parse()
+        self.assertEqual((record['status'], record['stage'], record['coverage_status']), ('missing', 'aa', 'partial'))
+        self.assertEqual(record['amplicons'][0]['status'], 'ok')
+        self.assertIn('cycles', record['amplicons'][1]['reason'])
 
     def test_modern_negative(self):
         write_fixture_run(self.root, (), "No-FSCNA")

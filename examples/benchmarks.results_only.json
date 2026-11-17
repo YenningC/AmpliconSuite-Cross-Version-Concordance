@@ -3,7 +3,7 @@
   "reference_version": "suite-1.6.2",
   "target_versions": ["suite-1.6.0", "suite-1.6.2"],
   "samples": [{
-    "sample_id": "EXAMPLE_01",
+    "sample_id": "EXAMPLE_01", "patient_id": "EXAMPLE_PATIENT_01",
     "source_version": "suite-1.6.0",
     "reference_build": "hg19",
     "source_result": {
@@ -19,5 +19,5 @@
     }]
   }],
   "runtimes": [],
-  "statistics": {"min_samples": 20, "margins": {}, "upstream_loss_margin": null}
+  "statistics": {"primary_pairs": [], "min_samples": 20, "margins": {}, "upstream_loss_margin": null}
 }

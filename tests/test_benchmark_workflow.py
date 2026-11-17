@@ -100,6 +100,34 @@ class BenchmarkWorkflowTests(unittest.TestCase):
         self.change_manifest(lambda data:data.update(analysis_scope='full_suite'))
         with self.assertRaisesRegex(ValueError,'Whole-genome'):load_manifest(self.manifest)
 
+    def test_patient_grouping_requires_complete_identifiers(self):
+        self.change_manifest(lambda data:data['samples'][0].update(patient_id='SYNTHETIC_PATIENT'))
+        with self.assertRaisesRegex(ValueError,'every sample'):
+            load_manifest(self.manifest)
+        self.change_manifest(lambda data:[s.update(patient_id='SYNTHETIC_PATIENT') for s in data['samples']])
+        config, _, _ = load_manifest(self.manifest)
+        self.assertEqual({s['patient_id'] for s in config['samples']}, {'SYNTHETIC_PATIENT'})
+
+    def test_prepare_panel_uses_installed_entry_and_keeps_reference(self):
+        out = self.root / 'prepare'
+        with patch('ascompare.versions.prepare_sources', side_effect=lambda entry, destination: {'id': entry['id']}) as fetch:
+            self.assertEqual(main(['prepare-panel', '--out', str(out), '--versions', SOURCE_VERSION]), 0)
+        self.assertEqual(fetch.call_count, 2)
+        panel = json.loads((out / 'prepared_panel.json').read_text())
+        self.assertEqual([row['id'] for row in panel['sources']], [REFERENCE_VERSION, SOURCE_VERSION])
+
+    def test_check_records_unrecognized_native_header_without_running_bam(self):
+        bad_dir = self.manifest.parent / 'results/SYNTHETIC_01' / REFERENCE_VERSION / 'ac'
+        profile = next(bad_dir.glob('*_amplicon_classification_profiles.tsv'))
+        profile.write_text(profile.read_text().replace('amplicon_number', 'unsupported_header'))
+        with patch('ascompare.benchmark.run_bounded_downstream', side_effect=AssertionError('Check cannot run AA')):
+            self.assertEqual(main(['check', '--manifest', str(self.manifest), '--out', str(self.root/'check')]), 2)
+        rows = json.loads((self.root/'check'/'import_format_check.json').read_text())
+        self.assertEqual(len(rows), 6)
+        target = next(r for r in rows if r['version'] == REFERENCE_VERSION and r['sample_id'] == 'SYNTHETIC_01')
+        self.assertNotEqual(target['status'], 'ok')
+        self.assertIn('unsupported_header', target['profile_columns'])
+
     def test_cli_demo_uses_real_workflow_and_leaves_reusable_manifest(self):
         out=self.root/'cli_demo'
         with patch('ascompare.benchmark_report._plots'):

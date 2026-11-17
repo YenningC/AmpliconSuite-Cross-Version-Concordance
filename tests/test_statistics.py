@@ -48,6 +48,37 @@ class PairedTests(unittest.TestCase):
         self.assertEqual(row["n_regions"],9)
         self.assertEqual(row["estimate"],-.5)
 
+    def test_patient_weight_and_bounds_use_independent_units(self):
+        records = [record(s, 'seed', version, detected=(version == 'old') == (s != 'third'))
+                   for s in ('first', 'second', 'third') for version in ('old', 'ref')]
+        patient_ids = {'first': 'P1', 'second': 'P1', 'third': 'P2'}
+        _, stats, compatibility = analyze(records, 'ref', dict(OPTIONS, patient_ids=patient_ids, min_samples=3))
+        delta = next(r for r in stats if r['metric'] == 'detection_difference' and r['subset'] == 'all_evaluable')
+        self.assertEqual((delta['n_independent_units'], delta['n_samples'], delta['n_regions']), (2, 3, 3))
+        self.assertEqual(delta['independence_unit'], 'patient')
+        self.assertEqual(delta['estimate'], 0.)
+        self.assertFalse(delta['sufficient_samples'])
+        self.assertIn('too_few_independent_samples', compatibility[0]['reasons'])
+        with self.assertRaisesRegex(ValueError, 'every analyzed sample'):
+            analyze(records, 'ref', dict(OPTIONS, patient_ids={'first': 'P1'}))
+
+    def test_primary_pair_selection_controls_only_inference(self):
+        records = [record(str(i), 'seed', v) for v in ('old', 'new', 'ref') for i in range(30)]
+        options = dict(OPTIONS, margins={m: .8 for m in AGREEMENT_METRICS})
+        for specification, n in (([['old', 'new']], 1), ('reference', 2), ([], 0)):
+            with self.subTest(specification=specification):
+                _, stats, compatible = analyze(records, 'ref', dict(options, primary_pairs=specification))
+                self.assertEqual(sum(r['primary_pair'] for r in compatible), n)
+                self.assertEqual(sum(r['decision'] == 'within_margin' for r in compatible), n)
+                for row in compatible:
+                    if row['primary_pair']:
+                        self.assertEqual(row['per_metric_alpha'], .05 / (n * len(AGREEMENT_METRICS)))
+                    else:
+                        self.assertEqual(row['reasons'], ['exploratory_pair_not_primary'])
+                        self.assertIsNone(row['per_metric_alpha'])
+                exploratory = [r for r in stats if not r['primary_pair']]
+                self.assertTrue(all(r['estimate'] is not None and r['p_difference'] is None for r in exploratory))
+
     def test_multi_labels_and_change_coordinates(self):
         records = [record("A","x","old",labels=["ecDNA","BFB"],intervals=[["c",0,10]]),
                    record("A","x","ref",labels=["ecDNA","Linear"],intervals=[["c",5,15]])]

@@ -21,7 +21,7 @@ asbench run --manifest benchmarks.results_only.json --out /output/existing_resul
 内置版本不包含二进制环境。可用锁定源准备结果与运行模板生成多版本配置：
 
 ```sh
-python scripts/prepare_panel.py --out /work/locked_sources
+asbench prepare-panel --out /work/locked_sources
 python scripts/build_benchmark_manifest.py \
   --input /config/base_manifest.json \
   --prepared /work/locked_sources/prepared_panel.json \

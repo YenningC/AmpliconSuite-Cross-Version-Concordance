@@ -1,30 +1,19 @@
 {
-  "date": "2026-11-17",
-  "program_version": "0.2.0",
-  "distribution": "GitHub source package",
+  "program_version": "0.3.0",
   "regression_tests": {
-    "discovered": 219,
-    "passed": 218,
+    "discovered": 232,
+    "passed": 231,
     "skipped": 1,
     "failed": 0,
-    "log_sha256": "ce70494284ec8a60a1bd05ba1e4c998b8085155618d901b576f6fd1ebd44cf62"
+    "log_sha256": "38de1e4a8283ee52422eca7d4b023aed7a01ea9737dbc948a68f504dbcb453ac"
   },
-  "installation": {
+  "wheel_install": {
     "passed": true,
-    "commands_passed": 8,
-    "wheel_sha256": "a5dfad76920133c492c828ba4bec5086a4dd19bc0ee75322935e99e8be5215b4",
-    "evidence_sha256": "dab64463137ebc896ff8068ec2026e5eeade62dd17b45076aa19f89eab7e29ac",
+    "commands_passed": 9,
     "outside_source_directory": true,
-    "scope": "new venv outside source directory; scientific dependencies explicitly reused by .pth"
+    "scope": "Isolated venv with explicitly reused scientific dependencies",
+    "sha256": "9a94e03d6c3b3e4b954abf47326f70e70f5c631348b76c78aec3959e9528f0ed"
   },
-  "document_links": {
-    "checked": 45,
-    "broken": 0
-  },
-  "scientific_python_implementation_unchanged": true,
-  "locked_component_versions_commits_and_hashes_unchanged": true,
-  "source_lock_descriptive_notes": "Generalized internal provenance comments and removed deployment-specific status notes; component identities unchanged",
-  "ci_configuration_included": true,
-  "github_hosted_ci_executed": false,
-  "scope": "Software and synthetic validation only; no new patient analysis or compatibility conclusion"
+  "synthetic_only": true,
+  "github_upload_performed": false
 }

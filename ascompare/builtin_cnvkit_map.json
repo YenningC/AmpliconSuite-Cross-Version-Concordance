@@ -11,6 +11,7 @@
     "suite-1.4.0": {"cnvkit_version": "0.9.10", "suite_commit": "3817f61043d526fdd57e20db1b26fd1ebbe0e664", "line": 6},
     "suite-1.5.0": {"cnvkit_version": "0.9.10", "suite_commit": "a6457444f4889ca640c4fd573244524b442832b2", "line": 6},
     "suite-1.5.2": {"cnvkit_version": "0.9.10", "suite_commit": "3dfe637eb3de1c522f2b209cbe158034c72be32a", "line": 6},
+    "suite-1.5.3": {"cnvkit_version": "0.9.13", "suite_commit": "3820e75013109c59147383cae49a1ee26ad51428", "line": 6},
     "suite-1.6.0": {"cnvkit_version": "0.9.13", "suite_commit": "c11f45d290d03ba61886b4824f1e718d9124e7ff", "line": 6},
     "suite-1.6.1": {"cnvkit_version": "0.9.13", "suite_commit": "cd822b91e00a65fec5aabe9989a29bdde084ecc4", "line": 6},
     "suite-1.6.2": {"cnvkit_version": "0.9.13", "suite_commit": "9b6cf5696ddc7e6d9bb8bea3ee15dd11cd04ce94", "line": 6}

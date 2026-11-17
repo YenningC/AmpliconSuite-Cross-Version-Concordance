@@ -5,6 +5,7 @@ runtime verification. AC-only results inherit AA graphs and cannot measure AA.
 """
 from __future__ import annotations
 
+import csv
 import hashlib
 import json
 import math
@@ -15,7 +16,8 @@ import shutil
 
 from .common import atomic_json, digest, now
 from .full_suite import WHOLE_SAMPLE, private_reference, audit_reference, read_seed_bed
-from .parsing import LABELS, aa_amplicon_count, parse_run
+from .parsing import (LABELS, OutputError, _amplicon_files, _associate_beds, _profile_labels,
+                      _profile_rows, _summary_count, aa_amplicon_count, parse_run)
 from .runner import check_ac_runtime, empty_record, execute
 from .versions import _check_source, _run
 
@@ -42,6 +44,7 @@ def _artifacts(aa, ac=None):
     if ac is not None:
         ac=Path(ac)
         paths.extend((p,Path('ac')/p.name) for p in sorted(ac.glob('*_amplicon_classification_profiles.tsv')))
+        paths.extend((p,Path('ac')/p.name) for p in sorted(ac.glob('*_features_to_graph.txt')))
         for directory in sorted(ac.glob('*_classification_bed_files')):
             if directory.is_symlink():raise ValueError('Linked classification directory is not an importable small artifact')
             if directory.is_dir():
@@ -49,13 +52,17 @@ def _artifacts(aa, ac=None):
     return paths
 
 
-def _copy_artifacts(paths, out):
+def _validate_artifacts(paths):
     total=0
     for path,_ in paths:
         if path.is_symlink() or not path.is_file():raise ValueError('Linked or non-regular result artifact refused')
         size=path.stat().st_size;total+=size
         if size>MAX_FILE_BYTES or total>MAX_TOTAL_BYTES:
             raise ValueError('Selected result text exceeds the small-artifact copy limit')
+
+
+def _copy_artifacts(paths, out):
+    _validate_artifacts(paths)
     provenance=[]
     for path,relative in paths:
         before=digest(path);target=out/relative;target.parent.mkdir(parents=True,exist_ok=True)
@@ -63,6 +70,126 @@ def _copy_artifacts(paths, out):
         if digest(target)!=before or digest(path)!=before:raise ValueError('Input artifact changed during import')
         provenance.append(dict(source=str(path.resolve()),relative_path=str(relative),sha256=before,bytes=target.stat().st_size))
     return provenance
+
+
+def _source_paths(spec):
+    base = Path(spec['run_dir']) if spec.get('run_dir') else None
+    aa = Path(spec['aa_dir']) if spec.get('aa_dir') else base / 'aa' if base else None
+    ac = Path(spec['ac_dir']) if spec.get('ac_dir') else base / 'ac' if base else None
+    stage = Path(spec['stages_json']) if spec.get('stages_json') else base / 'stages.json' if base else None
+    return base, aa, ac, stage
+
+
+def inspect_import_format(spec, supported_labels=None):
+    """Inspect small native output headers and associations without writing files.
+
+    Counts describe file structure. They do not validate interval contents,
+    runtime success, BAMs, or sample comparability.
+    """
+    _, aa, ac, stage_path = _source_paths(spec)
+    result = dict(status='missing', format_only=True, summary_amplicons=None, graph_files=0,
+                  cycles_files=0, profile_columns=[], profile_rows=0, matched_amplicons=0,
+                  feature_bed_files=0, issues=[])
+
+    def issue(status, stage, reason, amp=None):
+        item = dict(status=status, stage=stage, reason=reason)
+        if amp is not None:
+            item['amplicon_id'] = amp
+        result['issues'].append(item)
+
+    try:
+        if aa is None or not aa.is_dir():
+            raise OutputError('AA result directory missing', 'missing', 'aa')
+        if ac is None:
+            raise OutputError('AC result directory not specified', 'missing', 'ac')
+        artifact_paths = [path for path, _ in _artifacts(aa, ac)]
+        if stage_path and stage_path.is_file():
+            artifact_paths.append(stage_path)
+        elif spec.get('stages_json'):
+            issue('missing', 'result_reading', 'Explicit imported stage evidence is missing')
+        _validate_artifacts([(p, None) for p in artifact_paths])
+        stages = json.loads(stage_path.read_text()) if stage_path in artifact_paths else spec.get('declared_completion')
+        if stages is not None:
+            if not isinstance(stages, dict) or any(not isinstance(stages.get(name, {}), dict)
+                                                    for name in ('input_check', 'seed_processing', 'aa', 'ac')):
+                raise OutputError('Imported stage evidence is not a stage-record mapping')
+            for name in ('input_check', 'seed_processing', 'aa', 'ac'):
+                state = stages.get(name, {})
+                if state.get('status') in ('failed', 'interrupted', 'unsupported'):
+                    issue(state['status'], name, state.get('reason') or state.get('error') or 'Execution did not complete')
+        summaries = [p for p in artifact_paths if p.parent == aa and p.name.endswith('_summary.txt')]
+        graphs = [p for p in artifact_paths if p.parent == aa and p.name.endswith('_graph.txt')]
+        cycles = [p for p in artifact_paths if p.parent == aa and p.name.endswith('_cycles.txt')]
+        profiles = [p for p in artifact_paths if p.parent == ac and p.name.endswith('_amplicon_classification_profiles.tsv')]
+        result.update(graph_files=len(graphs), cycles_files=len(cycles),
+                      feature_bed_files=sum(p.name.endswith('_intervals.bed') for p in artifact_paths))
+        expected = _summary_count(summaries[0]) if len(summaries) == 1 else None
+        result['summary_amplicons'] = expected
+        if expected is None:
+            issue('missing', 'aa', 'AA summary missing, duplicated, or count unrecognized')
+        elif expected != len(graphs) or expected != len(cycles):
+            issue('missing', 'aa', 'AA summary count does not match graph/cycles file counts')
+        if expected == 0:
+            aa_stage, ac_stage = (stages or {}).get('aa', {}), (stages or {}).get('ac', {})
+            if aa_stage.get('status') != 'complete' or ac_stage.get('status') != 'skipped_zero_amplicons' \
+                    or aa_stage.get('returncode', 0) != 0:
+                issue('missing', 'aa', 'Zero amplicons require explicit AA completion and AC skipped-zero evidence')
+        else:
+            _inspect_amplicon_names(ac, supported_labels, result, issue, graphs, cycles, profiles, expected)
+    except OutputError as exc:
+        issue(exc.status, exc.stage, str(exc))
+    except (OSError, ValueError, KeyError, TypeError, csv.Error) as exc:
+        issue('invalid', 'result_reading', f'{type(exc).__name__}: {exc}')
+    issues = result['issues']
+    result['status'] = ('partial' if result['matched_amplicons'] else issues[0]['status']) if issues else 'ok'
+    return result
+
+
+def _inspect_amplicon_names(ac, supported_labels, result, issue, graphs, cycles, profiles, expected):
+    graphs = _amplicon_files(graphs, 'graph')
+    cycles = _amplicon_files(cycles, 'cycles')
+    if len(profiles) != 1:
+        raise OutputError('Expected one AC classification profile', 'missing', 'ac')
+    profile = profiles[0]
+    with profile.open(newline='') as handle:
+        result['profile_columns'] = next(csv.reader(handle, delimiter='\t'), [])
+    supported = set(supported_labels or LABELS)
+    if not supported_labels and 'FAN+' not in result['profile_columns']:
+        supported.remove('FAN')
+    fields, rows = _profile_rows(profile, supported)
+    result['profile_rows'] = len(rows)
+    if len(rows) != expected or set(rows) != set(graphs):
+        issue('missing', 'ac', 'AC rows do not match reconstructed amplicons exactly')
+    beds, aliases, map_issues, _ = _associate_beds(ac, profile, graphs)
+    for reason in map_issues:
+        issue('invalid', 'ac', reason)
+    for amp in sorted(set(graphs) | set(cycles) | set(rows)):
+        graph, cycle, row = graphs.get(amp), cycles.get(amp), rows.get(amp)
+        if not graph or not cycle or graph[1] != cycle[1] or not all(f[0].stat().st_size for f in (graph, cycle)):
+            issue('missing', 'aa', 'Missing or empty paired graph/cycles artifact', amp)
+        elif row is None:
+            issue('missing', 'ac', 'Missing AC profile row', amp)
+        elif None in row or any(row.get(field) is None for field in fields):
+            issue('invalid', 'ac', 'Malformed AC profile row', amp)
+        else:
+            prefix = Path(row['sample_name']).name
+            if prefix != graph[1] and (amp, prefix) not in aliases:
+                issue('invalid', 'ac', 'AC sample prefix does not match AA graph or native mapping', amp)
+                continue
+            try:
+                labels = _profile_labels(row, fields, supported)
+                supported_beds = [(feature.rsplit('_', 1)[0], bed) for feature, bed in beds.get(amp, [])
+                                  if not feature.lower().startswith('unknown')]
+                if supported_beds and row['amplicon_decomposition_class'] == 'No-FSCNA':
+                    raise OutputError('No-FSCNA profile contradicts classified feature BED')
+                if {label for label, _ in supported_beds} - supported:
+                    raise OutputError('Unrecognized class on a feature BED', 'unsupported')
+                available = {label for label, bed in supported_beds if bed.stat().st_size}
+                if labels - available:
+                    raise OutputError('Positive class lacks a nonempty named feature BED', 'missing')
+                result['matched_amplicons'] += 1
+            except OutputError as exc:
+                issue(exc.status, 'ac', str(exc), amp)
 
 
 def _aa_identity(out):
@@ -105,9 +232,7 @@ def import_result(spec, sample_id, version, destination, supported_labels, refer
     declared_completion (a stages-shaped mapping). Validated declared component
     matching is supplied by the caller as validated_declared_components.
     """
-    base=Path(spec['run_dir']) if spec.get('run_dir') else None
-    aa=Path(spec['aa_dir']) if spec.get('aa_dir') else base/'aa' if base else None
-    ac=Path(spec['ac_dir']) if spec.get('ac_dir') else base/'ac' if base else None
+    base, aa, ac, stage_path = _source_paths(spec)
     sources=[p for p in (base,aa,ac,spec.get('seeds_bed'),spec.get('stages_json')) if p]
     out=_new_output(destination,sources)
     support_known=bool(supported_labels)
@@ -127,7 +252,6 @@ def import_result(spec, sample_id, version, destination, supported_labels, refer
         if ac is None:raise FileNotFoundError('AC result directory not specified')
         provenance=_copy_artifacts(_artifacts(aa,ac),out)
         (out/'aa').mkdir(exist_ok=True);(out/'ac').mkdir(exist_ok=True)
-        stage_path=Path(spec['stages_json']) if spec.get('stages_json') else base/'stages.json' if base else None
         if spec.get('stages_json') and not stage_path.is_file():
             raise FileNotFoundError('Explicit imported stage evidence is missing')
         if spec.get('declared_completion') is not None and not isinstance(spec['declared_completion'],dict):

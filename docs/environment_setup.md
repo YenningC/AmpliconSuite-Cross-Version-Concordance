@@ -17,7 +17,7 @@ python3 -m venv .venv
 
 ```sh
 ascompare prepare --version suite-1.6.2 --out /absolute/work/locked_sources
-python scripts/prepare_panel.py --out /absolute/work/locked_sources
+asbench prepare-panel --out /absolute/work/locked_sources
 ```
 
 第一条只获取一个版本；第二条获取锁内面板，生成prepared_panel.json。只下载公共软件，不读取患者数据。锁内源码归档、commit及逐文件清单均核对，不用镜像标签推测版本。算法不在安装包内，以免未经核验的软件替代原版。
@@ -34,7 +34,7 @@ python scripts/prepare_panel.py --out /absolute/work/locked_sources
 
 ## 两个原生配方CNVkit环境
 
-前七个内置Suite的容器配方使用CNVkit0.9.10，后三个用0.9.13。Conda/独立安装最低约束不足以证明实际版本，必须核验。
+七个截至 1.5.2 的锁定 Suite 容器配方使用 CNVkit 0.9.10，1.5.3 和三个 1.6.x 使用 0.9.13。Conda/独立安装最低约束不足以证明实际版本，必须核验。
 
 建立两个隔离环境，分别安装确切的 `CNVkit==0.9.10` 和 `CNVkit==0.9.13`，配齐各版本依赖与R/DNAcopy。不能删除导入、伪造模块或静默改成最新版。发布脚本支持复用明确指定的基础环境，且拒绝覆盖已有环境或安装证据：
 

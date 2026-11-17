@@ -28,9 +28,13 @@ def fixture(n=3, kind="aa_ac", mode="with_bam"):
                 status="ok", labels=["ecDNA"], supported_labels=["ecDNA", "BFB"], intervals=[["chr1", 10, 20]],
                 features=[dict(label="ecDNA", intervals=[["chr1", 10, 20]])]))
             upstream.append(dict(sample_id=sample["sample_id"], version=version, seed_id="a", source_version=SOURCE,
-                cnvkit_version="SYNTHETIC_CNVKIT", status="retained", comparison_eligible=True,
+                cnvkit_version="SYNTHETIC_OLD" if version == SOURCE else "SYNTHETIC_NEW",
+                status="retained", comparison_eligible=True,
                 native_recipe_match=True,
-                retention_fraction=1., matching_rule="SYNTHETIC overlap rule, not an acceptance cutoff", calibration_status="passed"))
+                seed=dict(chrom='chr1', start=10, end=20), reference_mode='matched_normal', min_seed_overlap=1.,
+                retention_fraction=1., matching_rule="SYNTHETIC overlap rule, not an acceptance cutoff",
+                calibration_role='source_control' if version == SOURCE else 'candidate_observation',
+                calibration_status='passed' if version == SOURCE else 'unverified'))
     return config, downstream, upstream
 
 
@@ -126,17 +130,94 @@ class BenchmarkReportTests(unittest.TestCase):
             self.assertEqual(combined["downstream_decision"], "within_margin")
             self.assertEqual(combined["decision"], "insufficient_evidence")
             self.assertEqual(combined["decision_basis"], [])
-            self.assertIn("upstream_exceedance_not_validated_for_historical_inference", combined["reasons"])
+            self.assertIn("upstream_exceedance_not_validated_by_independent_source_control", combined["reasons"])
 
     def test_validated_upstream_exceedance_can_support_conditional_rejection(self):
         config, downstream, upstream = fixture(30)
         accepted_options(config)
         config["statistics"]["upstream_loss_margin"] = .2
-        for row in upstream: row.update(status="not_retained", retention_fraction=0.)
+        for row in upstream:
+            if row['version'] == OTHER:
+                row.update(status="not_retained", retention_fraction=0.)
         result = run(config, downstream, upstream)
         combined = next(r for r in result["compatibility_combined"] if r["target_version"] == OTHER)
         self.assertEqual(combined["decision"], "exceeds_margin")
-        self.assertEqual(combined["decision_basis"], ["calibrated_native_upstream_exceeds_margin"])
+        self.assertEqual(combined["decision_basis"], ["local_upstream_exceeds_margin_after_source_control"])
+        summary = next(r for r in result['upstream'] if r['target_version'] == OTHER)
+        self.assertEqual(summary['retention_difference'], -1.)
+        self.assertEqual(summary['retention_difference_n_seeds'], 30)
+        self.assertEqual(summary['source_control_cnvkit_versions'], ['SYNTHETIC_OLD'])
+
+    def test_nonzero_losses_can_pass_after_independent_control(self):
+        config, downstream, upstream = fixture(30)
+        accepted_options(config)
+        up = next(r for r in upstream if r['version'] == OTHER)
+        up.update(status='not_retained', retention_fraction=0.)
+        result = run(config, downstream, upstream)
+        compared = next(r for r in result['compatibility_combined'] if r['target_version'] == OTHER)
+        summary = next(r for r in result['upstream'] if r['target_version'] == OTHER)
+        self.assertEqual(compared['decision'], 'within_margin')
+        self.assertAlmostEqual(summary['retention_difference'], -1/30)
+
+    def test_source_control_requires_native_recipe_same_scope_and_complete_roles(self):
+        for edit in ('old_rows', 'coordinates', 'threshold', 'reference_mode', 'missing_control', 'mixed_source_cnvkit'):
+            with self.subTest(edit=edit):
+                config, downstream, upstream = fixture(30)
+                accepted_options(config)
+                if edit == 'old_rows':
+                    upstream[0].pop('calibration_role')
+                elif edit == 'coordinates':
+                    upstream[1]['seed'] = dict(chrom='chr2', start=10, end=20)
+                elif edit == 'threshold':
+                    upstream[1]['min_seed_overlap'] = .9
+                elif edit == 'reference_mode':
+                    upstream[1]['reference_mode'] = 'flat'
+                elif edit == 'mixed_source_cnvkit':
+                    upstream[0]['cnvkit_version'] = 'SYNTHETIC_OTHER'
+                else:
+                    upstream.pop(0)
+                result = run(config, downstream, upstream)
+                compared = next(r for r in result['compatibility_combined'] if r['target_version'] == OTHER)
+                self.assertEqual(compared['decision'], 'insufficient_evidence')
+
+    def test_first_page_preserves_directed_delta_and_event_denominators(self):
+        config, downstream, upstream = fixture(4)
+        for row in downstream:
+            if row['version'] == REF and row['sample_id'] in ('SYNTHETIC_0', 'SYNTHETIC_1'):
+                row.update(status='not_detected', labels=[], intervals=[], features=[])
+            elif row['version'] == REF and row['sample_id'] == 'SYNTHETIC_2':
+                row.update(labels=['BFB'], features=[dict(label='BFB', intervals=row['intervals'])])
+            elif row['version'] == REF and row['sample_id'] == 'SYNTHETIC_3':
+                row.update(status='missing')
+        result = run(config, downstream, upstream)
+        # Stored reference stats use SOURCE minus REF. Report uses REF minus SOURCE.
+        compared = next(r for r in result['downstream'] if r['target_version'] == REF)
+        self.assertAlmostEqual(compared['detection_difference'], -2/3)
+        self.assertEqual(compared['detection_difference_ci_low'], -1.)
+        self.assertEqual(compared['detection_difference_ci_high'], 1.)
+        self.assertEqual((compared['extra_detection_count'], compared['missed_detection_count']), (0, 2))
+        self.assertEqual((compared['class_change_count'], compared['class_change_n_regions']), (1, 1))
+        self.assertEqual((compared['detection_difference_n_regions'], compared['expected_regions']), (3, 4))
+        self.assertIn('-66.7', result['report_for_test'])
+
+    def test_patient_cluster_counts_and_exploratory_mode(self):
+        config, downstream, upstream = fixture(3)
+        for sid, sample in enumerate(config['samples']):
+            sample['patient_id'] = 'P1' if sid < 2 else 'P2'
+        for row in upstream:
+            if row['version'] == OTHER and row['sample_id'] != 'SYNTHETIC_2':
+                row.update(status='not_retained', retention_fraction=0.)
+        config['statistics'].update(primary_pairs=[])
+        accepted_options(config)
+        result = run(config, downstream, upstream)
+        row = next(r for r in result['upstream'] if r['target_version'] == OTHER)
+        self.assertEqual(result['independence_unit'], 'patient')
+        self.assertEqual(result['selected_independent_units'], 2)
+        self.assertEqual((row['n_samples'], row['n_independent_units']), (3, 2))
+        self.assertEqual(row['retention_difference'], -.5)
+        self.assertIsNone(row['agreement_alpha'])
+        self.assertTrue(all(r['decision'] == 'insufficient_evidence' for r in result['compatibility_combined']))
+        self.assertIn('探索性分析', result['report_for_test'])
 
     def test_reliable_downstream_exceedance_survives_unknown_upstream_but_not_failed_source_bridge(self):
         for bridge in ("passed", "failed", "unverified"):
@@ -256,7 +337,9 @@ class BenchmarkReportTests(unittest.TestCase):
         for row in downstream:
             if row["sample_id"] == config["samples"][1]["sample_id"]: row["source_version"] = OTHER
         for row in upstream:
-            if row["sample_id"] == config["samples"][1]["sample_id"]: row["source_version"] = OTHER
+            if row["sample_id"] == config["samples"][1]["sample_id"]:
+                role = 'source_control' if row['version'] == OTHER else 'candidate_observation'
+                row.update(source_version=OTHER, calibration_role=role)
         downstream += [{**r, "analysis_kind": "ac_only"} for r in downstream]
         result = run(config, downstream, upstream)
         self.assertEqual(len(result["compatibility_combined"]), 12)
@@ -289,7 +372,7 @@ class BenchmarkReportTests(unittest.TestCase):
             self.assertIn("SYNTHETIC TEST DATA", svg)
             self.assertIn("shared classes only*", svg)
             self.assertTrue(all((out/f"upstream_retention_ladder.{ext}").is_file() for ext in ("png", "pdf", "svg")))
-            self.assertIn("CAL?", (out/"upstream_retention_ladder.svg").read_text())
+            self.assertIn("SRC?", (out/"upstream_retention_ladder.svg").read_text())
             self.assertIn("CTRL", (out/"upstream_retention_ladder.svg").read_text())
             self.assertEqual(len(result["sample_plot_index"]), 2)
             for item in result["sample_plot_index"]:

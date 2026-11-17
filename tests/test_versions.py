@@ -10,7 +10,10 @@ class VersionTests(unittest.TestCase):
     def test_fixed_reference_and_component_fingerprints(self):
         lock = load_lock()
         self.assertEqual(lock['reference_version'], 'suite-1.6.2')
-        self.assertGreaterEqual(sum(bool(v.get('suite')) for v in lock['versions']), 10)
+        self.assertGreaterEqual(sum(bool(v.get('suite')) for v in lock['versions']), 11)
+        transition = next(v for v in lock['versions'] if v['id'] == 'suite-1.5.3')
+        self.assertEqual((transition['aa']['version'], transition['ac']['version']), ('1.5.r7', '1.5.2'))
+        self.assertFalse(transition.get('bfb'))
         for version in lock['versions']:
             for name in ('aa', 'ac', 'bfb', 'suite'):
                 if version.get(name):

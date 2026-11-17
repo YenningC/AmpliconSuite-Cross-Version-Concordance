@@ -1,12 +1,12 @@
 # AmpliconSuite Benchmarks
 
-**Compare version-specific amplification results with bounded computation and explicit statistical evidence.**
+**Cross-version concordance benchmark for selected amplification regions.**
 
 [中文说明](README.zh-CN.md) · [Examples](examples) · [Environment setup](docs/environment_setup.md) · [Statistical methods](docs/statistical_methods.md)
 
 AmpliconSuite Benchmarks is an independent, local research tool. It compares existing AmpliconSuite outputs, orchestrates selected-seed AA/AC runs, and evaluates whether known candidate seeds remain selected after local CNVkit reassessment. It produces per-sample similarity ladders, paired difference tables and compatibility reports.
 
-**Version:** 0.2.0 · **Fixed reference:** Suite **1.6.2**, AA **1.6.r2**, AC **2.0.1**. The reference is frozen; installing a newer upstream release does not change it. This project is not an official AmpliconSuite component.
+**Version:** 0.3.0 · **Fixed reference:** Suite **1.6.2**, AA **1.6.r2**, AC **2.0.1**. The reference is frozen; installing a newer upstream release does not change it. This project is not an official AmpliconSuite component.
 
 > Similarity describes observed software outputs. It is not a probability of biological truth or proof that complete workflows are interchangeable. Compatibility remains **insufficient evidence** when margins are unspecified or evidence is inadequate.
 
@@ -65,7 +65,7 @@ asbench report --out runs/comparison
 
 Paths are resolved relative to the manifest. Output must be separate from inputs and resources. Results can be specified with `aa_dir`/`ac_dir`, a `run_dir` containing `aa` and `ac`, or a recognizable Suite `result_dir`; ambiguous directories are rejected. Keep the original graph, cycles, summary, classification profiles and feature BED files where available. An image or summary label alone is insufficient.
 
-`check` inspects input declarations, files, coordinates, BAM headers and existing indexes; it is not a full BAM integrity scan. `run` also checks real component versions and source identities. `report` redraws saved, integrity-checked records without accessing BAM. A completed command/report does not imply that every scientific job succeeded: inspect coverage and failure tables.
+`check` inspects input declarations, coordinates, BAM headers, existing indexes and small result-file formats. `import_format_check.tsv` lists AA/AC file counts, headings and matching issues. `run` also checks real component versions and source identities. `report` redraws saved, integrity-checked records from the same program version without accessing BAM. Use a new output directory when upgrading from 0.2.0. A completed command/report does not imply that every scientific job succeeded: inspect coverage and failure tables.
 
 See the [server guide](docs/server_quickstart.md), [environment instructions](docs/environment_setup.md) and [local CNV calibration requirements](docs/local_cnv_calibration.md) for runtime configuration. These detailed technical notes are currently in Chinese; commands and configuration keys are shared across both languages.
 
@@ -90,7 +90,7 @@ These are configurable engineering starting points, **not official compatibility
 
 AA retains finite indexed background sampling and extension into connected regions. The BAM is not cropped. If reading limits are exceeded, the run fails explicitly instead of returning a truncated structure as successful. Native CNVkit `bedcov` is bounded by finite BED/query lengths and process timeouts; its internal read count is not directly observable. The guard is intended for audited scientific callers, not hostile-code isolation.
 
-Source-Suite reruns are compared with the supplied original results. Local upstream calibration requires traceable original evidence. Failed or unverified bridging/calibration prevents unsupported combined acceptance; descriptive results remain available. The recomputed local seeds are not all fed into AA again, so the combined report is **stepwise conditional evidence**, not an end-to-end discovery benchmark.
+Source-Suite reruns are compared with the supplied original results. Upstream calibration uses a separate same-version source control and traceable original evidence. Target-version losses are observations. Combined decisions require the appropriate source checks and shared local analysis conditions. The recomputed local seeds are not all fed into AA again, so the combined report is **stepwise conditional evidence**, not an end-to-end discovery benchmark.
 
 ## Locked component panel
 
@@ -103,13 +103,14 @@ Source-Suite reruns are compared with the supplied original results. Local upstr
 | 1.4.0 | 1.5.r3 | 1.4.2 | — | 0.9.10 |
 | 1.5.0 | 1.5.r4 | 1.5.1 | — | 0.9.10 |
 | 1.5.2 | 1.5.r6 | 1.5.2 | — | 0.9.10 |
+| 1.5.3 | 1.5.r7 | 1.5.2 | — | 0.9.13 |
 | 1.6.0 | 1.6.r0 | 2.0.0 | 1.0.1 | 0.9.13 |
 | 1.6.1 | 1.6.r1 | 2.0.0 | 1.0.1 | 0.9.13 |
 | **1.6.2 — reference** | **1.6.r2** | **2.0.1** | **1.0.2** | **0.9.13** |
 
 These are explicit benchmark component recipes. Source commits, archive hashes and source-manifest hashes are recorded in [`versions.lock.json`](versions.lock.json); CNVkit build-recipe evidence is in [`builtin_cnvkit_map.json`](ascompare/builtin_cnvkit_map.json). A Suite label or image name alone does not prove its installed components. Historical versions are never silently replaced. See [version evidence](docs/version_evidence.md) for qualifications, including Suite 1.3.4 and the separate legacy diagnostic recipe.
 
-CNVkit 0.9.14 is supported only as an explicitly identified controlled condition, not a substitute for those historical recipes. Historical AA requires an appropriate Mosek installation/license. Source availability and a successful version probe are not evidence that a version has completed a real sample.
+CNVkit 0.9.14 is supported only as an explicitly identified controlled condition, not a substitute for those historical recipes. Historical AA requires an appropriate Mosek installation/license. See the validation record for the separate evidence levels: source lock, runtime launch, synthetic component test and real-sample workflow. For a downsampling reproducibility comparison, see the [cohort study guide](docs/cohort_study.md).
 
 ## Similarity and compatibility
 
@@ -117,7 +118,7 @@ The main ladders compare each input **source version → target version**, with 
 
 Four downstream endpoints are kept separate: detection agreement, full label-set agreement, interval Jaccard and class-specific interval Jaccard. Unsupported classes are explicit; partial shared-class comparisons cannot appear as complete classification agreement. Upstream reports candidate retention separately.
 
-Multiple seeds are first averaged within each sample; independent samples then receive equal weight. Reports provide effects, sample-level uncertainty and paired detection tests. Agreement decisions use prespecified loss margins and conservative one-sided bounds with multiple-comparison control. They do not interpret `P > 0.05` as compatibility. All-negative regions are separated from signal-positive performance.
+The report opens with paired direction (`target − source`), detection change and an interval, added/missed/changed counts, and eligible denominators. Upstream also shows paired candidate retention on the candidates measurable by both versions. Add `patient_id` to every sample for patient-level grouping. Seeds are averaged within samples, then samples within each patient, and patients are weighted equally. Agreement decisions use prespecified loss margins and conservative one-sided bounds with multiple-comparison control. For a learning cohort, set `statistics.primary_pairs` to `[]` to produce descriptive results. For validation, prespecify the selected version pairs and margins on a separate set of patients. The [cohort study guide](docs/cohort_study.md) explains how to plan margins and avoid choosing thresholds on the validation data.
 
 | Decision | Interpretation |
 |---|---|
@@ -135,7 +136,8 @@ Execution failures, missing files and unsupported classes remain distinct from t
 
 | Output | Contents |
 |---|---|
-| `report.md`, `summary.json` | Main report, source/reference identities, scope and limitations |
+| `report.md`, `summary.json` | Paired effects, denominators, source/reference identities and evidence |
+| `import_format_check.tsv` | Small-file format audit from `asbench check` |
 | `similarity_ladder.*`, `sample_ladders/` | Aggregate and per-sample ladders in PNG/PDF/SVG |
 | `sample_plot_index.tsv`, `sample_similarity.tsv` | Plot paths, observed similarities and evaluation status |
 | `compatibility_table.*`, `compatibility_combined.tsv` | Three-state compatibility summaries |
@@ -149,9 +151,9 @@ Repeat the same `run` command to resume. Successful caches are checked against r
 
 ## Validation status
 
-The 0.2.0 validation recorded **219 tests: 218 passed and one optional environment-dependent test skipped**. Separate actual-component tests completed finite synthetic CNVkit runs for 0.9.10, 0.9.13 and 0.9.14, plus a 0.9.13 flat-reference run. AC/BFB dependency/solver probes and installed-package CLI checks also passed.
+The 0.3.0 regression exercises independent upstream calibration, patient-level aggregation, exploratory comparisons, the paired change summary and partial native results. Actual CNVkit 0.9.10 and 0.9.13 completed synthetic BAM tests. Suite 1.5.3 has an audited source lock and local component launch evidence.
 
-These are preliminary software and component checks. **The new bounded executor has not completed real-patient AA reconstruction or a patient-level compatibility validation.** Linux CI is included but its hosted execution is not claimed here. Previous installation checks explicitly reused scientific dependencies, rather than testing a clean Linux server. See [validation details](docs/validation_status.md) and [machine-readable evidence](validation_summary.json).
+The published environment image passed Linux integration checks for the pinned Benchmarks 0.2.0 checkout. Real-patient bounded AA reconstruction, patient-level compatibility and the 0.3.0 hosted Linux check remain pending. [Validation details](docs/validation_status.md) · [Machine-readable evidence](validation_summary.json)
 
 ```sh
 python -m unittest discover -s tests -v
@@ -169,4 +171,4 @@ Independent adapters for [EC-comparator](https://github.com/AmpliconSuite/EC-com
 
 This repository contains no patient data, private configurations, reference genomes, upstream algorithm environments or solver licenses. Keep actual analysis manifests, inputs and generated results outside version control.
 
-**A license for this project's own code has not yet been selected.** Public availability does not itself grant an open-source license. Third-party tools retain their own terms; see [license status](LICENSE_STATUS.md). No author identity, DOI or publication claim is inferred. Repository upload instructions are in [GITHUB_UPLOAD.md](GITHUB_UPLOAD.md).
+**Prior written permission is required for use of this project’s original code**, subject to the published notice. Requests can use the contact listed there. Third-party tools retain their own terms. [Permission notice](LICENSE_STATUS.md) · [Repository upload instructions](GITHUB_UPLOAD.md).

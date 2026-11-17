@@ -4,7 +4,7 @@
   "target_versions": ["suite-1.6.0", "suite-1.6.2"],
   "reference": {"build": "hg19", "fasta": "/resources/AA_DATA_REPO/hg19/hg19full.fa", "aa_data_repo": "/resources/AA_DATA_REPO"},
   "samples": [{
-    "sample_id": "EXAMPLE_01", "source_version": "suite-1.6.0", "reference_build": "hg19",
+    "sample_id": "EXAMPLE_01", "patient_id": "EXAMPLE_PATIENT_01", "source_version": "suite-1.6.0", "reference_build": "hg19",
     "alignment": "/data/EXAMPLE_01/tumor.bam", "index": "/data/EXAMPLE_01/tumor.bam.bai",
     "normal_alignment": "/data/EXAMPLE_01/normal.bam", "normal_index": "/data/EXAMPLE_01/normal.bam.bai",
     "seeds_bed": "/data/EXAMPLE_01/source_AA_CNV_SEEDS.bed",
@@ -19,5 +19,5 @@
   "aa_parameters": {"downsample": -1}, "ac_parameters": {"min_size": 50000, "min_flow": 1.0},
   "io_policy": {"max_fetch_bp": 50000000, "max_total_fetch_bp": 500000000, "max_total_reads": 20000000},
   "job_timeout_seconds": 3600,
-  "statistics": {"min_samples": 20, "margins": {}, "upstream_loss_margin": null}
+  "statistics": {"primary_pairs": [], "min_samples": 20, "margins": {}, "upstream_loss_margin": null}
 }

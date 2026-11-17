@@ -8,6 +8,7 @@ from pathlib import Path
 import random
 import re
 import sys
+from . import __version__
 from .common import atomic_json, digest, now, table
 from .inputs import safe_id
 from .parsing import merge_intervals
@@ -15,7 +16,7 @@ from .runner import empty_record, execute, local_reference, check_ac_runtime
 from .versions import load_lock, verify_runtime
 from .benchmark_policy import guarded_command
 
-PROGRAM_VERSION = '0.2.0'
+PROGRAM_VERSION = __version__
 FIXED_REFERENCE = 'suite-1.6.2'
 PATH_KEYS = {'alignment', 'index', 'normal_alignment', 'normal_index', 'seeds_bed',
              'source_seed_bed', 'baseline_cns', 'aa_dir', 'ac_dir', 'run_dir',
@@ -146,6 +147,12 @@ def load_manifest(path):
     ids = [safe_id(s['sample_id']) for s in samples]
     if len(set(ids)) != len(ids):
         raise ValueError('Duplicate sample_id')
+    if any('patient_id' in sample for sample in samples):
+        for sample in samples:
+            patient = sample.get('patient_id')
+            if not isinstance(patient, str) or not patient:
+                raise ValueError('When patient_id is used, every sample must have a nonempty patient_id')
+            safe_id(patient)
     for s in samples:
         if not s.get('source_version'):
             raise ValueError('source_version is required in both input modes')
@@ -197,6 +204,8 @@ def load_manifest(path):
     ds = float(config.get('aa_parameters', {}).get('downsample', -1))
     if not math.isfinite(ds) or ds != -1 and ds <= 0:
         raise ValueError('AA downsample must be -1 or positive finite coverage')
+    from .benchmark_report import _configuration
+    _configuration(config)  # Reject invalid analysis plans before launching component jobs.
     return config, lock, entries
 
 
@@ -322,6 +331,7 @@ def run_bounded_downstream(sample, seeds, runtime, entry, verified, config, out)
     effective_env = dict(os.environ, **runtime.get('env', {}))
     identity['solver_environment'] = {k: effective_env.get(k) for k in
         ('MOSEKLM_LICENSE_FILE', 'GRB_LICENSE_FILE', 'DYLD_LIBRARY_PATH', 'LD_LIBRARY_PATH', 'PATH')}
+    identity['python_hash_seed'] = effective_env.get('PYTHONHASHSEED')
     license_paths = [Path.home() / 'mosek' / 'mosek.lic']
     for k in ('MOSEKLM_LICENSE_FILE', 'GRB_LICENSE_FILE'):
         value = effective_env.get(k)
@@ -503,6 +513,7 @@ def _run_locked(config, lock, entries, out, check_only):
     atomic_json(out / 'versions.lock.json', lock)
     runtimes = {r['id']: r for r in config.get('runtimes', [])}
     checks, upstream, downstream, source_files = [], [], [], []
+    import_checks = []
     ref = config.get('reference', {})
     reference_identity = []
     if ref.get('fasta'):
@@ -513,6 +524,9 @@ def _run_locked(config, lock, entries, out, check_only):
         for p in sorted(resource_root.glob('*')):
             if p.is_file() and p.suffix not in ('.fa', '.fasta'):
                 reference_identity.append(dict(path=str(p), sha256=digest(p)) if p.stat().st_size <= 16*1024**2 else fast_fingerprint(p))
+    background = config.get('local_cnv', {}).get('background_bed')
+    if config['mode'] == 'with_bam' and background and Path(background).is_file():
+        reference_identity.append(dict(path=background, sha256=digest(background), kind='local_cnv_background_bed'))
     config['_reference_identity'] = reference_identity
     source_files.extend(reference_identity)
     for sample in config['samples']:
@@ -529,7 +543,14 @@ def _run_locked(config, lock, entries, out, check_only):
             if seeds_path:
                 sample['seeds_bed'] = seeds_path
                 source_files.append(dict(path=seeds_path, sha256=digest(seeds_path)))
-            for spec in [sample['source_result'], *sample['comparison_results']]:
+            specs = [(source, sample['source_result'])] + [(r['version'], r) for r in sample['comparison_results']]
+            for vid, spec in specs:
+                if check_only:
+                    from .benchmark_import import inspect_import_format
+                    entry = entries[vid]
+                    categories = entry.get('supported_labels', entry.get('supported_classes', []))
+                    result = inspect_import_format(spec, categories)
+                    import_checks.append(dict(sample_id=sid, version=vid, **result))
                 try:
                     if spec.get('reference_build', sample['reference_build']) != sample['reference_build']:
                         raise ValueError('Imported result reference_build differs from the sample declaration')
@@ -553,6 +574,9 @@ def _run_locked(config, lock, entries, out, check_only):
                         raise
                     spec['_input_error'] = str(exc)
             if config['mode'] == 'with_bam':
+                for key in ('baseline_cns', 'source_seed_bed', 'baseline_provenance'):
+                    if sample.get(key) and Path(sample[key]).is_file():
+                        source_files.append(dict(path=sample[key], sha256=digest(sample[key]), kind=key))
                 sample['_input_identities'] = _validate_bam(sample, config, lengths)
                 source_files.extend(sample['_input_identities'])
                 policy = dict(config.get('io_policy', {}))
@@ -575,8 +599,10 @@ def _run_locked(config, lock, entries, out, check_only):
     atomic_json(out / 'input_check.json', checks)
     table(out / 'input_check.tsv', checks)
     if check_only:
+        atomic_json(out / 'import_format_check.json', import_checks)
+        table(out / 'import_format_check.tsv', import_checks)
         atomic_json(out / 'config.resolved.json', config)
-        return dict(check_only=True, input_check=checks)
+        return dict(check_only=True, input_check=checks, import_format_check=import_checks)
     verified = {}
     for sample in config['samples']:
         sid, source = sample['sample_id'], sample['source_version']
@@ -642,7 +668,9 @@ def _run_locked(config, lock, entries, out, check_only):
                 r['reference_scope'] = baseline.get('reference_scope', 'declared_reference_' + sample['reference_build'])
                 downstream.append(r)
         else:
-            local_config = copy.deepcopy(config)
+            # The per-sample fields are top-level overrides. Copying every
+            # manifest sample here would make cohort preparation quadratic.
+            local_config = dict(config)
             local_config['_io_policy_path'] = sample['_policy_path']
             local_config['_cnv_cache_dir'] = str(out / 'cnv_cache')
             for vid in versions:
@@ -712,13 +740,25 @@ def main(argv=None):
         p.add_argument('--out', required=True)
     p = sub.add_parser('report'); p.add_argument('--out', required=True)
     p = sub.add_parser('demo'); p.add_argument('--out', required=True)
+    p = sub.add_parser('prepare-panel', help='Fetch verified upstream sources without reading samples')
+    p.add_argument('--out', required=True)
+    p.add_argument('--versions', nargs='+')
+    p.add_argument('--lock')
     sub.add_parser('versions')
     args = parser.parse_args(argv)
     try:
+        if args.command == 'prepare-panel':
+            from .versions import prepare_panel
+            print('Saved ' + str(prepare_panel(args.out, args.versions, args.lock)))
+            return 0
         if args.command == 'versions':
+            from .benchmark_cnv import load_builtin_map
             lock = load_lock()
+            recipe_map = load_builtin_map()['versions']
             print(json.dumps(dict(reference_version=lock['reference_version'], versions=[
-                {k: (v['version'] if isinstance(v, dict) and 'version' in v else v) for k, v in e.items() if k in ('id', 'suite', 'aa', 'ac', 'bfb')}
+                {**{k: (v['version'] if isinstance(v, dict) and 'version' in v else v)
+                    for k, v in e.items() if k in ('id', 'suite', 'aa', 'ac', 'bfb', 'source_status', 'runtime_status')},
+                 'cnvkit_recipe': recipe_map.get(e['id'], {}).get('cnvkit_version')}
                 for e in lock['versions'] if e.get('suite')]), indent=2))
             return 0
         if args.command == 'demo':
@@ -728,6 +768,9 @@ def main(argv=None):
         if args.command == 'report':
             from .benchmark_report import write_benchmark_reports
             out = Path(args.out).resolve()
+            run_version = json.loads((out / 'provenance.json').read_text()).get('program_version')
+            if run_version != PROGRAM_VERSION:
+                raise ValueError('Use the original program version to redraw this report, or run the manifest into a new output directory')
             expected = json.loads((out / 'report_inputs.sha256.json').read_text())
             if not all((out / name).is_file() and digest(out / name) == value for name, value in expected.items()):
                 raise ValueError('Report inputs changed after execution; rerun the same manifest to revalidate, or start a new analysis')
@@ -736,7 +779,8 @@ def main(argv=None):
         else:
             config, lock, entries = load_manifest(args.manifest)
             result = run_benchmark(config, lock, entries, args.out, args.command == 'check')
-            if args.command == 'check' and any(r['status'] != 'ok' for r in result['input_check']):
+            if args.command == 'check' and any(r['status'] != 'ok' for r in
+                    result['input_check'] + result['import_format_check']):
                 return 2
         print('Saved local benchmark: ' + str(Path(args.out).resolve()))
         return 0

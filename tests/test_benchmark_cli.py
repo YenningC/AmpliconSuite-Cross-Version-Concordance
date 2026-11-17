@@ -29,11 +29,12 @@ class BenchmarkCliTests(unittest.TestCase):
         args = self.fixture(); before = copy.deepcopy(args)
         result = build(*args)
         self.assertEqual(args, before)
-        self.assertEqual(len(result['runtimes']), 10)
+        self.assertEqual(len(result['runtimes']), 11)
         self.assertEqual(result['reference_version'], 'suite-1.6.2')
         for runtime in result['runtimes']:
             modern = runtime['id'].startswith('suite-1.6.')
-            self.assertEqual(runtime['cnvkit_version'], '0.9.13' if modern else '0.9.10')
+            uses_cnvkit_0913 = modern or runtime['id'] == 'suite-1.5.3'
+            self.assertEqual(runtime['cnvkit_version'], '0.9.13' if uses_cnvkit_0913 else '0.9.10')
             self.assertEqual(runtime['solver'], 'clarabel' if modern else 'mosek')
             self.assertEqual(runtime['ac_python'], '/bfb101/python' if runtime['id'] in
                              ('suite-1.6.0','suite-1.6.1') else '/current/python')

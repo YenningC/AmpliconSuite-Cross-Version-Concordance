@@ -14,7 +14,7 @@ class PanelConfigTests(unittest.TestCase):
     def test_official_panel_uses_correct_sources_environments_and_solvers(self):
         lock,prepared,templates=self.fixture()
         config=build_config(prepared,templates,lock,{'build':'hg19','fasta':'/ref/x.fa','aa_data_repo':'/ref'},mosek_license='/secure/mosek.lic')
-        self.assertEqual(len(config['versions']),10)
+        self.assertEqual(len(config['versions']),11)
         self.assertEqual(config['versions'][0]['id'],'suite-1.6.2')
         for v in config['versions']:
             self.assertTrue(v['id'].startswith('suite-'))

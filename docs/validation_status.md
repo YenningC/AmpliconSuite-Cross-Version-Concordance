@@ -1,6 +1,14 @@
-# Validation status — 0.2.0
+# Validation status — 0.3.0
 
-The fixed comparison reference is Suite1.6.2 / AA1.6.r2 / AC2.0.1. The 2026-11-17 validation contains **219 discovered regression tests: 218 passed, one optional actual-CNVkit test skipped**. The optional workflow was also run separately with explicitly configured real components. Machine-readable aggregate evidence and retained original log hashes are in [validation_summary.json](../validation_summary.json).
+The fixed reference remains Suite 1.6.2. The 0.3.0 update was developed and tested with synthetic inputs. The local regression suite checks patient clustering, exploratory cohorts, signed paired changes and their direction, an independent source calibration, the reachable upstream exceedance branch, partial amplicons and format-only preflight. Real CNVkit 0.9.10 and 0.9.13 were separately exercised on temporary synthetic BAMs. Suite 1.5.3 source identities were checked against the official image and source locks. Its AA/AC launch and a small local Mosek solver probe passed.
+
+Real-patient bounded AA and cohort-level compatibility remain unverified. Hosted Linux testing of 0.3.0 is pending after upload. The published Linux environment image and its successful run below apply to Benchmarks 0.2.0. [Public environment package](https://github.com/YenningC/AmpliconSuite-Benchmarks-Environments/pkgs/container/ampliconsuite-benchmarks-environments) · [Linux test run](https://github.com/YenningC/AmpliconSuite-Benchmarks-Environments/actions/runs/44028252316)
+
+Machine-readable results are in [validation_summary.json](../validation_summary.json).
+
+## 0.2.0 baseline evidence
+
+The fixed comparison reference was Suite 1.6.2 / AA 1.6.r2 / AC 2.0.1. The initial validation contains **219 discovered regression tests: 218 passed, one optional actual-CNVkit test skipped**. The optional workflow was also run separately with explicitly configured real components. The current machine-readable file retains this baseline evidence.
 
 | Area | Evidence | Limit |
 |---|---|---|
@@ -16,11 +24,11 @@ The fixed comparison reference is Suite1.6.2 / AA1.6.r2 / AC2.0.1. The 2026-11-1
 
 The real CNVkit tests used a finite synthetic BED of approximately32kb. Matched-normal cases produced seven guarded processes including two identity probes; flat produced six. Passing attempts recorded no blocked operations. CNVkit0.9.10 used explicit compatibility dependencies for CBS; HMM was not validated. See [environment setup](environment_setup.md).
 
-## GitHub distribution checks
+## 0.2.0 GitHub distribution checks
 
 The GitHub distribution preserves the scientific Python implementation. Public-facing README files, packaging utilities, repository exclusions and CI configuration were added; internal operational history and real-study records were excluded. Source-lock descriptive notes were generalized without changing component versions, commits, archive hashes or source-manifest hashes. A timeout regression test has a more generous child-process startup allowance for shared CI hosts; product timeouts are unchanged.
 
-The default test suite creates temporary synthetic inputs and does not fetch upstream code or access patient files. GitHub Actions configuration is included for Linux/Python3.10 and3.12; **hosted CI execution must be verified after upload**. Native Windows is not claimed as supported.
+The default test suite uses temporary synthetic inputs and does not fetch upstream code or access patient files. The current Benchmarks workflow is configured for Linux/Python 3.10 and 3.12. Native Windows support has not been verified.
 
 ## Still required for research use
 

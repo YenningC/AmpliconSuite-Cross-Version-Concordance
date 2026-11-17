@@ -1,6 +1,7 @@
 """Paired, sample-clustered comparisons. No inference of biological truth.
 
-Each sample contributes one mean per metric, regardless of its seed count.
+Seeds are averaged within samples. A supplied patient mapping further averages
+samples within patients, so each independent patient contributes one mean.
 Compatibility uses a conservative bounded-mean agreement test, not a failure
 to reject a difference. See docs/statistical_methods.md.
 """
@@ -199,12 +200,50 @@ def _pair(a, b, reference_version, pair_kind):
     return row
 
 
-def _sample_means(rows, metric):
+def _independent_means(sample_values, patient_ids=None):
+    if patient_ids is None:
+        return np.array([sample_values[s] for s in sorted(sample_values)], dtype=float)
+    groups = defaultdict(list)
+    for sample, value in sample_values.items():
+        groups[patient_ids[sample]].append(value)
+    return np.array([np.mean(groups[p]) for p in sorted(groups)], dtype=float)
+
+
+def _sample_means(rows, metric, patient_ids=None):
     by_sample = defaultdict(list)
     for row in rows:
         if row.get(metric) is not None:
             by_sample[row["sample_id"]].append(float(row[metric]))
-    return np.array([np.mean(by_sample[s]) for s in sorted(by_sample)], dtype=float), sum(map(len, by_sample.values()))
+    means = {s: np.mean(values) for s, values in by_sample.items()}
+    return _independent_means(means, patient_ids), len(means), sum(map(len, by_sample.values()))
+
+
+def _primary_pair_keys(specification):
+    """Normalize a prespecified list of unordered, distinct version pairs."""
+    if specification is None or specification == 'reference':
+        return specification
+    if not isinstance(specification, list):
+        raise ValueError("primary_pairs must be 'reference' or a list of version pairs")
+    pairs = set()
+    for pair in specification:
+        if (not isinstance(pair, list) or len(pair) != 2 or
+                any(not isinstance(v, str) or not v.strip() for v in pair) or pair[0] == pair[1]):
+            raise ValueError('Each primary pair must contain two distinct version IDs')
+        pair_key = frozenset(pair)
+        if pair_key in pairs:
+            raise ValueError('Duplicate primary version pair')
+        pairs.add(pair_key)
+    return pairs
+
+
+def _is_primary_pair(version, comparator, reference, keys):
+    if version == comparator:
+        return False
+    if keys is None:
+        return True
+    if keys == 'reference':
+        return reference in (version, comparator)
+    return frozenset((version, comparator)) in keys
 
 
 def _bootstrap(values, iterations, rng, alpha):
@@ -220,7 +259,7 @@ def _bootstrap(values, iterations, rng, alpha):
 
 
 def _sign_flip(values, iterations, rng):
-    """Paired whole-sample label-swap test; requires exchangeability under H0."""
+    """Paired whole-cluster label-swap test, requiring exchangeability under H0."""
     values = values[values != 0]
     if not len(values):
         return 1.0, "exact_cluster_sign_flip"
@@ -247,9 +286,11 @@ def _holm(rows, source, target):
 def analyze(records, reference_version, options=None):
     """Return per-seed differences, metric estimates, and compatibility decisions.
 
-    options: versions, margins, min_samples, alpha, bootstrap, permutations, seed.
+    options: versions, margins, min_samples, alpha, bootstrap, permutations, seed,
+    primary_pairs, patient_ids.
     Margins are maximum tolerable mean losses in [0,1], chosen before analysis.
-    All eligible seeds within each sample are averaged before inference.
+    Seed pairing remains within sample. The independent unit is the patient if
+    a complete patient mapping is specified, and the sample otherwise.
     """
     options = options or {}
     analysis_scope=options.get('analysis_scope','fixed_seed')
@@ -271,6 +312,11 @@ def analyze(records, reference_version, options=None):
     if reference_version not in versions:
         raise ValueError(f"Reference version absent: {reference_version}")
     keys = sorted({(r["sample_id"], r["seed_id"]) for r in records})
+    patient_ids = options.get('patient_ids')
+    if patient_ids is not None and (not isinstance(patient_ids, dict) or any(
+            not isinstance(patient_ids.get(s), str) or not patient_ids[s].strip() for s, _ in keys)):
+        raise ValueError('patient_ids must identify the patient for every analyzed sample')
+    independence_unit = 'patient' if patient_ids is not None else 'sample'
     lookup = {}
     for r in records:
         key = (r["version"], r["sample_id"], r["seed_id"])
@@ -290,9 +336,12 @@ def analyze(records, reference_version, options=None):
     pairs += [(a, b, "historical_pair") for a, b in itertools.combinations(historical, 2)]
     rng = np.random.default_rng(int(options.get("seed", 20261117)))
     pair_rows, stats_rows, compat_rows = [], [], []
-    # Simultaneous one-sided limits across all version pairs and four metrics.
-    decision_alpha = alpha/max(1, len(pairs)*len(AGREEMENT_METRICS))
+    primary_keys = _primary_pair_keys(options.get('primary_pairs'))
+    n_primary_pairs = sum(_is_primary_pair(a, b, reference_version, primary_keys) for a, b, _ in pairs)
+    # Simultaneous one-sided limits across the formal pairs and four metrics.
+    decision_alpha = alpha / (n_primary_pairs * len(AGREEMENT_METRICS)) if n_primary_pairs else None
     for version, comparator, kind in pairs:
+        is_primary = _is_primary_pair(version, comparator, reference_version, primary_keys)
         rows = [_pair(get(version,s,t), get(comparator,s,t), reference_version, kind) for s,t in keys]
         for row in rows:
             row['analysis_scope']=analysis_scope
@@ -311,13 +360,13 @@ def analyze(records, reference_version, options=None):
             selections.append(('seed_stage_evaluable',rows,('seed_count_difference','seed_interval_jaccard','seed_interval_distance')))
         for subset, selected,metrics in selections:
             for metric in metrics:
-                values, n_regions = _sample_means(selected, metric)
+                values, n_samples, n_regions = _sample_means(selected, metric, patient_ids)
                 n = len(values)
                 estimate = float(np.mean(values)) if n else None
                 lo, hi = _bootstrap(values, bootstrap, rng, alpha) if n else (None, None)
                 lower, upper = (-1, 1) if metric == "detection_difference" else (0, 1)
                 radius = (upper-lower)*math.sqrt(math.log(2/alpha)/(2*n)) if n and metric!='seed_count_difference' else None
-                p, test = _sign_flip(values, permutations, rng) if n >= 2 and metric in ("detection_difference","seed_count_difference") else (None, "")
+                p, test = _sign_flip(values, permutations, rng) if is_primary and n >= 2 and metric in ("detection_difference","seed_count_difference") else (None, "")
                 event_metrics = {"detection_agreement", "detection_discordance", "extra_detection", "missed_detection", "label_discordance", "class_change"}
                 raw_events = int(sum(r[metric] for r in selected if r[metric] is not None)) if n_regions and metric in event_metrics else None
                 stat = dict(reference_version=reference_version, version=version, comparator=comparator, pair_kind=kind,
@@ -325,13 +374,15 @@ def analyze(records, reference_version, options=None):
                             subset=subset, metric=metric, estimate=estimate, bootstrap_ci_low=lo, bootstrap_ci_high=hi,
                             conservative_ci_low=max(lower, estimate-radius) if radius is not None else None,
                             conservative_ci_high=min(upper, estimate+radius) if radius is not None else None,
-                            confidence_level=1-alpha, n_samples=n, n_regions=n_regions,n_comparison_units=n_regions,raw_region_events=raw_events,
+                            confidence_level=1-alpha, n_samples=n_samples, n_independent_units=n,
+                            independence_unit=independence_unit, primary_pair=is_primary,
+                            n_regions=n_regions,n_comparison_units=n_regions,raw_region_events=raw_events,
                             total_regions=len(region_rows), excluded_regions=len(region_rows)-len(valid),no_seed_samples=n_no_seed_samples,
                             p_difference=p, p_difference_holm=None, difference_test=test,
-                            inference="sample_equal_weight", bootstrap_degenerate=bool(n and lo == hi),
+                            inference=independence_unit+"_equal_weight", bootstrap_degenerate=bool(n >= 2 and lo == hi),
                             min_samples=min_samples, sufficient_samples=n >= min_samples,
                             margin=None, agreement_upper=None, p_agreement_bound=None, agreement_decision="not_assessed")
-                if metric in AGREEMENT_METRICS and subset == "signal_positive":
+                if is_primary and metric in AGREEMENT_METRICS and subset == "signal_positive":
                     margin = margins.get(metric)
                     u = min(1.0, estimate+math.sqrt(math.log(1/decision_alpha)/(2*n))) if n else None
                     p_agree = math.exp(-2*n*(float(margin)-estimate)**2) if n and margin is not None and estimate < float(margin) else 1.0 if n and margin is not None else None
@@ -349,7 +400,7 @@ def analyze(records, reference_version, options=None):
         reasons = []
         if any(margins.get(m) is None for m in AGREEMENT_METRICS):
             reasons.append("agreement_margins_not_predefined")
-        if any(r["n_samples"] < min_samples for r in primary):
+        if any(r["n_independent_units"] < min_samples for r in primary):
             reasons.append("too_few_independent_samples")
         if len(valid) != len(region_rows):
             reasons.append("unevaluable_regions_present")
@@ -365,7 +416,9 @@ def analyze(records, reference_version, options=None):
         if any(r["reference_scope"] != r["comparator_reference_scope"] for r in valid):
             reasons.append("reference_scopes_differ")
         decision = "insufficient_evidence"
-        if not reasons and all(r["agreement_decision"] == "within_margin" for r in primary):
+        if not is_primary:
+            reasons = ['exploratory_pair_not_primary']
+        elif not reasons and all(r["agreement_decision"] == "within_margin" for r in primary):
             decision = "within_margin"
         elif any(r["agreement_decision"] == "exceeds_margin" for r in primary):
             decision = "exceeds_margin"
@@ -373,13 +426,15 @@ def analyze(records, reference_version, options=None):
             reasons.append("confidence_bounds_do_not_establish_agreement")
         compat_rows.append(dict(reference_version=reference_version, version=version, comparator=comparator,
                                 analysis_scope=analysis_scope,comparison_unit='sample' if analysis_scope=='full_suite' else 'sample_seed',
-                                pair_kind=kind, decision=decision,
+                                pair_kind=kind, decision=decision, primary_pair=is_primary,
                                 conclusion={"within_margin":"在预设检出、分类及区段指标范围内支持初步兼容", "exceeds_margin":"至少一个指标超过预设差异范围", "insufficient_evidence":"证据不足"}[decision],
                                 reasons=sorted(set(reasons)), total_regions=len(region_rows), evaluable_regions=len(valid),
                                 signal_regions=len(signal), signal_samples=len({r['sample_id'] for r in signal}),
+                                signal_independent_units=len({patient_ids[r['sample_id']] if patient_ids is not None else r['sample_id'] for r in signal}),
+                                independence_unit=independence_unit,
                                 excluded_regions=len(region_rows)-len(valid), no_seed_samples=n_no_seed_samples,min_samples=min_samples,
                                 reference_scopes=scopes,
-                                family_alpha=alpha, per_metric_alpha=decision_alpha, margins=margins,
+                                family_alpha=alpha, per_metric_alpha=decision_alpha if is_primary else None, margins=margins,
                                 compatibility_metric_scope={'required_metrics':list(AGREEMENT_METRICS),
                                     'not_established':['same_cycle_order','same_breakpoint_topology','biological_truth','whole_version_interchangeability']},
                                 scope=("tested samples; full Suite including CNVkit, seed processing, AA and AC; whole-sample label/feature unions, not amplicon-ID matching; " if analysis_scope=='full_suite' else "tested samples, fixed seeds, shared resources, AA+AC; CNVkit excluded; ")+"reference scope="+",".join(scopes)))

@@ -171,6 +171,26 @@ def prepare_sources(lock_entry, destination):
     return result
 
 
+def prepare_panel(destination, versions=None, lock_path=None):
+    """Prepare the selected locked Suite sources and write their runtime paths."""
+    from .common import atomic_json
+
+    lock = load_lock(lock_path)
+    entries = {entry['id']: entry for entry in lock['versions'] if entry.get('suite')}
+    requested = list(dict.fromkeys([lock['reference_version'], *(versions or entries)]))
+    unknown = [version for version in requested if version not in entries]
+    if unknown:
+        raise ValueError('Suite version absent from lock: ' + ', '.join(unknown))
+    root = Path(destination).resolve()
+    rows = []
+    for version in requested:
+        print('Preparing ' + version, flush=True)
+        rows.append(prepare_sources(entries[version], root))
+    output = root / 'prepared_panel.json'
+    atomic_json(output, {'reference_version': lock['reference_version'], 'sources': rows})
+    return output
+
+
 def _run(args, env):
     try:
         p = subprocess.run(args, env=env, capture_output=True, text=True, timeout=90)

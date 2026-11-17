@@ -8,7 +8,7 @@ CNVkit 原生 coverage、reference、fix、CBS segment 计算保留；WGS 风格
 
 局部中位数归一化、背景和分段上下文与全基因组不同。**候选保留率可以描述，但未经校准不能当作整条 Suite 流程兼容证据。** `min_seed_overlap` 默认 1.0（完全覆盖），是可配置的基准匹配阈值，不是 CNVkit/AA 的官方阈值。它计算合并后的保留区段与原种子的交集长度/原种子长度，重叠不会重复计数。
 
-`builtin_cnvkit_map.json` 来自锁定 Suite 源码中的容器构建配方：7 个历史版本对应 CNVkit 0.9.10，3 个 1.6.x 版本对应 0.9.13。配方不等于已核实发布镜像内的实际环境。程序仍检查实际 CNVkit 版本和导入源码；0.9.14 等受控版本标 `controlled_cnvkit`、`native_recipe_match=false`，不能用于声称原生历史依赖兼容。
+`builtin_cnvkit_map.json` 来自锁定 Suite 源码中的容器构建配方。1.5.2 及以前的七个版本对应 CNVkit 0.9.10，1.5.3 和三个 1.6.x 版本对应 0.9.13。程序核查实际 CNVkit 版本和导入源码。0.9.14 等受控版本记录为 `controlled_cnvkit`，报告保留其观察结果和实验范围。
 
 ## 何时能校准
 
@@ -59,9 +59,11 @@ CNVkit 原生 coverage、reference、fix、CBS segment 计算保留；WGS 风格
 
 校准执行的检查为：来源 CNVkit 版本与本次实际版本相同；build 和参考策略相同；原始肿瘤和正常 BAM 抽样身份与当前输入一致（`flat` 只检查肿瘤）；CNS 和候选 BED 的完整 SHA-256 与原运行记录相同；原候选及 CNS 对请求种子的覆盖均达到 `min_seed_overlap`。满足来源条件后，本次局部流程仍保留候选记为 `calibration_status=passed`；不能再保留记为 `failed`；来源缺失或不匹配记为 `unverified`。
 
-`passed` 的范围固定为 `selected_source_candidate_retention_only`：只是原来源版本对选定阳性候选的再保留对照。它不验证全基因组假阴性、精确拷贝数、未选区域、AA 重建或生物学真实性，也不会自动把其他 CNVkit 版本校准为通过。其他版本若无对应的同输入来源对照，仍为 `unverified`。
+独立校准只发生在运行版本与样本来源 Suite 相同的对照重跑，标为 `calibration_role=source_control`。`passed` 的范围是 `selected_source_candidate_retention_only`，表示原来源版本对所选候选的再保留。目标版本行标记为 `candidate_observation`，其保留或漏种均作为结果记录。
 
-每次保存 `calibration_evidence.json`，含判据、来源文件哈希、逐种子原始候选覆盖和本次保留率。缺少可追溯历史证据是实际限制；仍生成描述性差异和图表，兼容判定保留“证据不足”。
+条件性联合判定使用独立来源校准，要求双方有完整可评价候选、共同的匹配设置和参考策略，且使用各自锁定的 CNVkit 配方。跨版本的结果仍适用于本次已知候选和局部设置。原数据与同版本 AA＋AC 重跑另做来源复现检查。
+
+来源对照保存 `calibration_evidence.json`，包括判据、来源文件哈希、逐种子原始候选覆盖和本次保留率。缺少可追溯历史证据时仍生成描述性差异和图表。
 
 ## 合成集成测试
 

@@ -16,6 +16,7 @@ from pathlib import Path
 
 LABELS = ("ecDNA", "BFB", "FAN", "Linear", "Complex-non-cyclic", "Virus")
 LEGACY_LABELS = tuple(x for x in LABELS if x != "FAN")
+REQUIRED_PROFILE_FIELDS = {"sample_name", "amplicon_number", "amplicon_decomposition_class", "ecDNA+", "BFB+"}
 
 
 class OutputError(ValueError):
@@ -47,8 +48,63 @@ def aa_amplicon_count(run_dir):
     files = sorted((Path(run_dir) / "aa").glob("*_summary.txt"))
     if len(files) != 1:
         return None
-    hits = re.findall(r"^\s*#Amplicons\s*=\s*(\d+)\s*$", files[0].read_text(errors="replace"), re.M)
+    return _summary_count(files[0])
+
+
+def _summary_count(path):
+    hits = re.findall(r"^\s*#Amplicons\s*=\s*(\d+)\s*$", path.read_text(errors="replace"), re.M)
     return int(hits[0]) if len(hits) == 1 else None
+
+
+def _amplicon_files(paths, artifact):
+    files = {}
+    for path in paths:
+        match = re.fullmatch(rf"(.+)_(amplicon\d+)_{artifact}\.txt", path.name)
+        if not match or match[2] in files:
+            raise OutputError(f"Ambiguous AA {artifact} naming: {path.name}", stage="aa")
+        files[match[2]] = path, match[1]
+    return files
+
+
+def _profile_header(reader, supported):
+    columns = reader.fieldnames or []
+    if len(set(columns)) != len(columns):
+        raise OutputError("Duplicated AC profile columns", stage="ac")
+    missing = REQUIRED_PROFILE_FIELDS.difference(columns)
+    if missing:
+        raise OutputError("AC profile header not supported: " + ",".join(sorted(missing)), "unsupported", "ac")
+    if "FAN" in supported and "FAN+" not in columns:
+        raise OutputError("Advertised FAN capability is missing from AC profile", "unsupported", "ac")
+    return set(columns)
+
+
+def _profile_amplicon(row):
+    amp = row.get("amplicon_number")
+    if not isinstance(amp, str) or not re.fullmatch(r"amplicon\d+", amp):
+        raise OutputError("AC profile has an unrecognized amplicon identifier", "unsupported", "ac")
+    return amp
+
+
+def _profile_rows(path, supported):
+    with path.open(newline="") as handle:
+        reader = csv.DictReader(handle, delimiter="\t")
+        fields = _profile_header(reader, supported)
+        rows = {}
+        for row in reader:
+            amp = _profile_amplicon(row)
+            if amp in rows:
+                raise OutputError("Duplicate AC profile row: " + amp, stage="ac")
+            rows[amp] = row
+    return fields, rows
+
+
+def _check_reference(intervals, lengths, allowed_missing, stage, description):
+    if lengths is None:
+        return
+    for chrom, start, end in intervals:
+        if chrom not in lengths or not 0 <= start < end <= lengths[chrom]:
+            raise OutputError(description + " reaches a missing or out-of-bounds reference contig",
+                              "unsupported" if chrom in allowed_missing else "invalid", stage)
 
 
 def _graph_intervals(path):
@@ -115,6 +171,143 @@ def _profile_labels(row, fields, supported):
     return flags
 
 
+def _read_graph_pair(graph, cycle, lengths, allowed_missing):
+    if graph is None:
+        raise OutputError("Missing AA graph", "missing", "aa")
+    path, _ = graph
+    if cycle is None or cycle[0].name != path.name.replace("_graph.txt", "_cycles.txt"):
+        raise OutputError("Missing paired AA cycles file", "missing", "aa")
+    cycle_path = cycle[0]
+    if not cycle_path.stat().st_size:
+        raise OutputError("Empty paired AA cycles file", "missing", "aa")
+    text = cycle_path.read_text()
+    if not re.search(r"^Segment\s", text, re.M) or not re.search(r"^Cycle=", text, re.M):
+        raise OutputError("Cycles file lacks segment or cycle records", "invalid", "aa")
+    try:
+        intervals = _graph_intervals(path)
+        _check_reference(intervals, lengths, allowed_missing, "aa", "AA extension")
+    except OutputError as exc:
+        raise OutputError(str(exc), exc.status, "aa") from exc
+    return intervals
+
+
+def _native_feature_map(path, beds, graph_by_basename):
+    """Use only paths already selected by the importer, never open map entries."""
+    bed_names = {}
+    for bed in beds:
+        bed_names.setdefault(bed.name, []).append(bed)
+    mapped, seen, issues = {}, set(), []
+    with path.open() as handle:
+        for number, line in enumerate(handle, 1):
+            if not line.strip():
+                continue
+            fields = line.rstrip("\n\r").split("\t")
+            if len(fields) != 2:
+                issues.append(f"Malformed native feature-to-graph mapping at row {number}")
+                continue
+            bed_name, graph_name = (Path(value).name for value in fields)
+            possible_beds = bed_names.get(bed_name, [])
+            amp = graph_by_basename.get(graph_name)
+            match = re.fullmatch(r"(.+)_(amplicon\d+)_(.+)_intervals\.bed", bed_name)
+            if not match or len(possible_beds) != 1 or amp is None or amp != match[2]:
+                issues.append(f"Native feature-to-graph mapping cannot verify row {number}")
+                for bed in possible_beds:
+                    seen.add(bed)
+                    mapped.pop(bed, None)
+                continue
+            bed = possible_beds[0]
+            if bed in seen:
+                issues.append(f"Conflicting native feature-to-graph mapping at row {number}")
+                mapped.pop(bed, None)
+            else:
+                mapped[bed] = amp, match[1], match[3]
+                seen.add(bed)
+    return mapped, seen.difference(mapped), issues
+
+
+def _associate_beds(ac, profile, graphs):
+    beds = sorted(ac.glob("*_classification_bed_files/*_intervals.bed"))
+    map_path = profile.with_name(profile.name.replace("_amplicon_classification_profiles.tsv", "_features_to_graph.txt"))
+    graph_by_basename = {path.name: amp for amp, (path, _) in graphs.items()}
+    if map_path.is_file():
+        mapped, ambiguous, issues = _native_feature_map(map_path, beds, graph_by_basename)
+    else:
+        mapped, ambiguous, issues = {}, set(), []
+    features, aliases, unmatched = {}, set(), []
+    for bed in beds:
+        if bed in ambiguous:
+            continue
+        if bed in mapped:
+            amp, prefix, feature = mapped[bed]
+            aliases.add((amp, prefix))
+        else:
+            match = re.fullmatch(r"(.+)_(amplicon\d+)_(.+)_intervals\.bed", bed.name)
+            if not match or match[2] not in graphs or graphs[match[2]][1] != match[1]:
+                if "_unknown_" not in bed.name and bed.stat().st_size:
+                    unmatched.append(bed.name)
+                continue
+            amp, feature = match[2], match[3]
+        features.setdefault(amp, []).append((feature, bed))
+    issues.extend("Unmatched classification BED: " + name for name in unmatched)
+    return features, aliases, issues, map_path if map_path.is_file() else None
+
+
+def _read_classification(amp, row, graph_prefix, feature_beds, alias, fields, supported, lengths, allowed_missing):
+    if None in row or any(row.get(field) is None for field in fields):
+        raise OutputError("Malformed AC profile row", stage="ac")
+    profile_prefix = Path(row["sample_name"]).name
+    if profile_prefix != graph_prefix and (amp, profile_prefix) not in alias:
+        raise OutputError("AC sample prefix does not match AA graph or native mapping", stage="ac")
+    labels = _profile_labels(row, fields, supported)
+    found = set()
+    features = []
+    feature_ids = set()
+    for feature_id, path in feature_beds:
+        label = feature_id.rsplit("_", 1)[0]
+        if label.lower().startswith("unknown"):
+            continue
+        if feature_id in feature_ids:
+            raise OutputError("Duplicate feature IDs for AC amplicon: " + feature_id, stage="ac")
+        feature_ids.add(feature_id)
+        if row["amplicon_decomposition_class"] == "No-FSCNA":
+            raise OutputError("No-FSCNA profile contradicts classified feature BED", stage="ac")
+        if label not in supported:
+            raise OutputError("Unrecognized feature BED class: " + label, "unsupported", "ac")
+        labels.add(label)
+        intervals = _bed_intervals(path)
+        _check_reference(intervals, lengths, allowed_missing, "ac", "AC feature")
+        if intervals:
+            found.add(label)
+            features.append(dict(amplicon_id=amp, feature_id=feature_id, label=label,
+                                 intervals=intervals, source=str(path.resolve())))
+    if labels - found:
+        raise OutputError("Positive class lacks nonempty feature BED: " + ",".join(sorted(labels - found)), "missing", "ac")
+    return labels, features
+
+
+def _parse_amplicon(amp, graph, cycles, row, features, aliases, fields, supported, lengths, allowed_missing):
+    record = dict(amplicon_id=amp, labels=[], intervals=[], reconstruction_intervals=[], detected=None,
+                  decomposition_class=row.get("amplicon_decomposition_class") if row else None)
+    stage = "aa"
+    try:
+        recon = _read_graph_pair(graph, cycles, lengths, allowed_missing)
+        record["reconstruction_intervals"] = recon
+        stage = "ac"
+        if row is None:
+            raise OutputError("Missing AC profile row", "missing", "ac")
+        labels, parsed_features = _read_classification(amp, row, graph[1], features, aliases, fields,
+                                                       supported, lengths, allowed_missing)
+        record.update(status="ok" if labels else "not_detected", detected=bool(labels), labels=sorted(labels),
+                      intervals=merge_intervals([i for f in parsed_features for i in f["intervals"]]),
+                      stage="result_reading", reason="Complete AA/AC output for this amplicon")
+        return record, parsed_features
+    except OutputError as exc:
+        record.update(status=exc.status, stage=stage, reason=str(exc))
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        record.update(status="invalid", stage=stage, reason=f"{type(exc).__name__}: {exc}")
+    return record, []
+
+
 def parse_run(run_dir, sample_id, seed_id, version, supported_labels=None, reference_lengths=None,
               allowed_missing_contigs=()):
     """Normalize one seed-anchored run, including all connected AA outputs.
@@ -130,7 +323,8 @@ def parse_run(run_dir, sample_id, seed_id, version, supported_labels=None, refer
     result = dict(sample_id=sample_id, seed_id=seed_id, version=version,
                   status="missing", labels=[], intervals=[], reconstruction_intervals=[],
                   amplicons=[], features=[], evidence=[], stage="result_reading", reason="",
-                  detected=None, supported_labels=sorted(supported),
+                  detected=None, coverage_status="unavailable", evaluable_amplicon_count=0,
+                  unevaluable_amplicon_count=None, issues=[], supported_labels=sorted(supported),
                   unsupported_labels=sorted(set(LABELS) - supported),
                   category_status={x: "unavailable" if x in supported else "unsupported" for x in LABELS})
 
@@ -143,7 +337,10 @@ def parse_run(run_dir, sample_id, seed_id, version, supported_labels=None, refer
             raise OutputError("Stage completion record is missing; output presence cannot establish success", "missing")
         evidence(stage_path)
         stages = json.loads(stage_path.read_text())
-        for stage in ("input_check", "seed_processing", "aa", "ac"):
+        stage_names = ("input_check", "seed_processing", "aa", "ac")
+        if not isinstance(stages, dict) or any(not isinstance(stages.get(name, {}), dict) for name in stage_names):
+            raise OutputError("Stage completion evidence must contain named stage records")
+        for stage in stage_names:
             state = stages.get(stage, {})
             if state.get("status") in ("failed", "interrupted", "unsupported"):
                 raise OutputError(state.get("reason") or state.get("error") or "Execution did not complete",
@@ -157,111 +354,80 @@ def parse_run(run_dir, sample_id, seed_id, version, supported_labels=None, refer
         for p in (root / "aa").glob("*_summary.txt"):
             evidence(p)
         result["aa_amplicon_count"] = count
-        graphs = sorted((root / "aa").glob("*_amplicon*_graph.txt"))
-        cycles = sorted((root / "aa").glob("*_amplicon*_cycles.txt"))
+        graphs = _amplicon_files(sorted((root / "aa").glob("*_amplicon*_graph.txt")), "graph")
+        cycles = _amplicon_files(sorted((root / "aa").glob("*_amplicon*_cycles.txt")), "cycles")
         if count != len(graphs) or count != len(cycles):
-            raise OutputError("AA summary count does not match complete graph/cycles files", "missing", "aa")
+            result["issues"].append(dict(status="missing", stage="aa",
+                reason="AA summary count does not match complete graph/cycles files"))
         if count == 0:
-            result.update(status="not_detected", detected=False, stage="aa",
+            if result["issues"]:
+                raise OutputError(result["issues"][0]["reason"], "missing", "aa")
+            result.update(status="not_detected", detected=False, stage="aa", coverage_status="complete",
+                          unevaluable_amplicon_count=0,
                           reason="AA exited successfully and explicitly reported zero amplicons")
             result["category_status"] = {x: "not_detected" if x in supported else "unsupported" for x in LABELS}
             return result
-        graph_by_amp = {}
-        for p in graphs:
-            match = re.fullmatch(r"(.+)_(amplicon\d+)_graph\.txt", p.name)
-            if not match or match[2] in graph_by_amp:
-                raise OutputError("Ambiguous AA graph naming")
-            cp = p.with_name(p.name.replace("_graph.txt", "_cycles.txt"))
-            if not cp.is_file() or cp.stat().st_size == 0:
-                raise OutputError("Missing/empty paired cycles file", "missing", "aa")
-            # Segment/cycle evidence is needed, not merely an empty placeholder.
-            ctext = cp.read_text()
-            if not re.search(r"^Segment\s", ctext, re.M) or not re.search(r"^Cycle=", ctext, re.M):
-                raise OutputError("Cycles file lacks segment or cycle records", "invalid", "aa")
-            ints = _graph_intervals(p)
-            graph_by_amp[match[2]] = (match[1], ints)
-            result["reconstruction_intervals"].extend(ints)
-            evidence(p)
-            evidence(cp)
-        result["reconstruction_intervals"] = merge_intervals(result["reconstruction_intervals"])
-        if reference_lengths is not None:
-            for chrom, start, end in result["reconstruction_intervals"]:
-                if chrom not in reference_lengths or not 0 <= start < end <= reference_lengths[chrom]:
-                    raise OutputError("AA extension reaches a missing or out-of-bounds reference contig",
-                                      "unsupported" if chrom in allowed_missing_contigs else "invalid", "aa")
         ac = stages.get("ac", {})
-        if ac.get("status") != "complete" or ac.get("returncode", 0) != 0:
-            raise OutputError("Successful AC completion is not recorded", "missing", "ac")
         profile_files = sorted((root / "ac").glob("*_amplicon_classification_profiles.tsv"))
-        if len(profile_files) != 1:
-            raise OutputError("Expected one AC classification profile", "missing", "ac")
-        profile = profile_files[0]
-        evidence(profile)
-        with profile.open(newline="") as handle:
-            reader = csv.DictReader(handle, delimiter="\t")
-            fields = set(reader.fieldnames or [])
-            required = {"sample_name", "amplicon_number", "amplicon_decomposition_class", "ecDNA+", "BFB+"}
-            if not required <= fields:
-                raise OutputError("AC profile header not supported: " + ",".join(sorted(required - fields)), "unsupported")
-            if "FAN" in supported and "FAN+" not in fields:
-                raise OutputError("Advertised FAN capability is missing from AC profile", "unsupported")
-            rows = list(reader)
-        if len(rows) != count or {x["amplicon_number"] for x in rows} != set(graph_by_amp):
-            raise OutputError("AC rows do not match reconstructed amplicons exactly", "missing", "ac")
-        beds = sorted((root / "ac").glob("*_classification_bed_files/*_intervals.bed"))
-        seen = set()
-        for row in rows:
-            amp = row["amplicon_number"]
-            prefix, recon = graph_by_amp[amp]
-            if Path(row["sample_name"]).name != prefix:
-                raise OutputError("AC sample prefix does not match AA graph")
-            labels = _profile_labels(row, fields, supported)
-            amp_intervals = []
-            found = set()
-            for p in beds:
-                feature_prefix = prefix + "_" + amp + "_"
-                if not p.name.startswith(feature_prefix):
-                    continue
-                feature_id = p.name[len(feature_prefix):-len("_intervals.bed")]
-                label = feature_id.rsplit("_", 1)[0]
-                if label.lower().startswith("unknown"):
-                    continue
-                if row["amplicon_decomposition_class"] == "No-FSCNA":
-                    raise OutputError("No-FSCNA profile contradicts classified feature BED")
-                if label not in labels:
-                    # Preserve additional simultaneously classified feature types.
-                    if label not in supported:
-                        raise OutputError("Unrecognized feature BED class: " + label, "unsupported")
-                    labels.add(label)
-                ints = _bed_intervals(p)
-                if reference_lengths is not None:
-                    for chrom, start, end in ints:
-                        if chrom not in reference_lengths or not 0 <= start < end <= reference_lengths[chrom]:
-                            raise OutputError("AC feature reaches a missing or out-of-bounds reference contig",
-                                              "unsupported" if chrom in allowed_missing_contigs else "invalid", "ac")
-                if not ints:
-                    continue
-                found.add(label)
-                amp_intervals.extend(ints)
-                evidence(p)
-                result["features"].append(dict(amplicon_id=amp, feature_id=feature_id,
-                                               label=label, intervals=ints, source=str(p.resolve())))
-                seen.add(p)
-            if labels - found:
-                raise OutputError("Positive class lacks nonempty feature BED: " + ",".join(sorted(labels - found)), "missing", "ac")
-            result["labels"].extend(labels)
-            result["intervals"].extend(amp_intervals)
-            result["amplicons"].append(dict(amplicon_id=amp, labels=sorted(labels),
-                                           decomposition_class=row["amplicon_decomposition_class"],
-                                           intervals=merge_intervals(amp_intervals), reconstruction_intervals=recon))
-        # Unmatched positive BEDs indicate stale/mixed outputs, not extra calls.
-        for p in beds:
-            if p not in seen and "_unknown_" not in p.name and p.stat().st_size:
-                raise OutputError("Unmatched classification BED: " + p.name)
+        fields, rows, beds, aliases = set(), {}, {}, set()
+        try:
+            if ac.get("status") != "complete" or ac.get("returncode", 0) != 0:
+                raise OutputError("Successful AC completion is not recorded", "missing", "ac")
+            if len(profile_files) != 1:
+                raise OutputError("Expected one AC classification profile", "missing", "ac")
+            profile = profile_files[0]
+            evidence(profile)
+            fields, rows = _profile_rows(profile, supported)
+            beds, aliases, map_issues, mapping = _associate_beds(root / "ac", profile, graphs)
+            if mapping:
+                evidence(mapping)
+            for reason in map_issues:
+                result["issues"].append(dict(status="invalid", stage="ac", reason=reason))
+        except OutputError as exc:
+            result["issues"].append(dict(status=exc.status, stage=exc.stage, reason=str(exc)))
+            # Without a sound profile and association, individual AA outputs may
+            # be recovered for review, while AC results remain indeterminate.
+            rows = {}
+        except (OSError, ValueError, TypeError, csv.Error) as exc:
+            result["issues"].append(dict(status="invalid", stage="ac", reason=f"{type(exc).__name__}: {exc}"))
+            rows = {}
+        if rows and (len(rows) != count or set(rows) != set(graphs)):
+            result["issues"].append(dict(status="missing", stage="ac",
+                reason="AC rows do not match reconstructed amplicons exactly"))
+        for amp in sorted(set(graphs) | set(cycles) | set(rows), key=lambda x: (int(x[len("amplicon"):]), x)):
+            record, features = _parse_amplicon(amp, graphs.get(amp), cycles.get(amp), rows.get(amp),
+                                               beds.get(amp, []), aliases, fields, supported,
+                                               reference_lengths, allowed_missing_contigs)
+            result["amplicons"].append(record)
+            if record["reconstruction_intervals"]:
+                result["reconstruction_intervals"].extend(record["reconstruction_intervals"])
+                evidence(graphs[amp][0])
+                evidence(cycles[amp][0])
+            if record["status"] not in ("ok", "not_detected"):
+                result["issues"].append(dict(amplicon_id=amp, status=record["status"], stage=record["stage"],
+                                             reason=record["reason"]))
+                continue
+            result["evaluable_amplicon_count"] += 1
+            result["labels"].extend(record["labels"])
+            result["intervals"].extend(record["intervals"])
+            for feature in features:
+                result["evidence"].append(feature["source"])
+            result["features"].extend(features)
         result["labels"] = sorted(set(result["labels"]))
         result["intervals"] = merge_intervals(result["intervals"])
+        result["reconstruction_intervals"] = merge_intervals(result["reconstruction_intervals"])
+        result["unevaluable_amplicon_count"] = max(count, len(result["amplicons"])) - result["evaluable_amplicon_count"]
+        if result["issues"]:
+            issues = result["issues"]
+            # A structural AA failure must still block AC-only reclassification
+            # when AC itself is pending.
+            primary = next((i for i in issues if i["stage"] == "aa"), issues[0])
+            result.update(status=primary["status"], stage=primary["stage"], reason=primary["reason"],
+                          coverage_status="partial" if result["evaluable_amplicon_count"] else "unavailable")
+            result["category_status"].update({x: "detected_in_evaluable_amplicons" for x in result["labels"]})
+            return result
         result.update(status="ok" if result["labels"] else "not_detected",
-                      detected=bool(result["labels"]), stage="result_reading",
+                      detected=bool(result["labels"]), stage="result_reading", coverage_status="complete",
                       reason="Complete AA/AC output; full connected reconstruction retained")
         result["category_status"] = {x: "unsupported" if x not in supported else
                                      "detected" if x in result["labels"] else "not_detected" for x in LABELS}
