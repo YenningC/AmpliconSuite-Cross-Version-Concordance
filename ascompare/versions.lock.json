@@ -1,0 +1,498 @@
+{
+  "schema_version": 1,
+  "frozen_on": "2026-11-17",
+  "reference_version": "suite-1.6.2",
+  "selection_policy": "Source-pinned official Suite releases and separately identified historical diagnostic combinations. AmpliconSuite Benchmarks 0.2 uses only existing-result comparisons, fixed-source-AA AC reclassification, or bounded local candidate CNVkit plus selected-seed AA+AC. Whole-genome BAM workflows are disabled. CNVkit recipe mapping is in builtin_cnvkit_map.json and actual installed versions are independently verified; source tags do not prove runtime identity.",
+  "versions": [
+    {
+      "id": "aa-1.3.r2-ac-1.2.1",
+      "aa": {
+        "repo": "https://github.com/AmpliconSuite/AmpliconArchitect",
+        "tag": "v1.3.r2",
+        "commit": "1ced872c5d4951f244de70beac81ba8def00bcde",
+        "version": "1.3.r2",
+        "entrypoint": "src/AmpliconArchitect.py",
+        "archive_sha256": "45254227d717b3ee2868f4c2811a7ef3007950eaf854b54442dd9209b047a28c",
+        "manifest_sha256": "7b6ba9c3f281088bef258ab9320aba47f1367b4747a5bb445225851afd46d8c5"
+      },
+      "ac": {
+        "repo": "https://github.com/AmpliconSuite/AmpliconClassifier",
+        "tag": "v1.2.1",
+        "commit": "a53b3542ec1484f171e2b2f4bc31e59212a4337d",
+        "version": "1.2.1",
+        "entrypoint": "amplicon_classifier.py",
+        "archive_sha256": "09ab6f39f2173a5f60b910a16136b828a613fdfef5944f83a017199014a8c70b",
+        "manifest_sha256": "1c80eda0eccc369f0ce73aac8a130da8f01405a223f0525a4acba0e3f492960e"
+      },
+      "suite": null,
+      "selection_reason": "Historical AA version deliberately paired with AC1.2.1 for a controlled AA+AC comparison; not claimed to be an original publication AC or a historical Suite bundle.",
+      "supported_classes": [
+        "ecDNA",
+        "BFB",
+        "Complex-non-cyclic",
+        "Linear"
+      ],
+      "source_status": "downloaded_verified",
+      "runtime_status": "not_distributed_verify_on_target_system",
+      "evidence_urls": [
+        "https://github.com/AmpliconSuite/AmpliconArchitect/releases/tag/v1.3.r2"
+      ]
+    },
+    {
+      "id": "suite-1.2.2",
+      "suite": {
+        "repo": "https://github.com/AmpliconSuite/AmpliconSuite-pipeline",
+        "tag": "v1.2.2",
+        "version": "1.2.2",
+        "commit": "543b7ebc8b0d251eefbbcd14e5c1e27635e09a6a",
+        "entrypoint": "AmpliconSuite-pipeline.py",
+        "archive_sha256": "72a14dad911716345e7ced02c802680f5da5169b7904ef4594d642c39d8a4039",
+        "manifest_sha256": "0fea6b9270c29e1e9d25cc4f05559c0e288779ad716dc0139d06d3846388e0ee"
+      },
+      "aa": {
+        "repo": "https://github.com/AmpliconSuite/AmpliconArchitect",
+        "tag": "v1.3.r8",
+        "version": "1.3.r8",
+        "commit": "a4a92569d81bdf56ec4458177eef127d0fc1c374",
+        "entrypoint": "src/AmpliconArchitect.py",
+        "archive_sha256": "4f1351a3886d46e68bf407adb0b77c0170959b97a0158a818ac05492c55fa75a",
+        "manifest_sha256": "3b32ea3f84470d44756537fbe3796094b32f1d693023932b5a678896f358a7ee"
+      },
+      "ac": {
+        "repo": "https://github.com/AmpliconSuite/AmpliconClassifier",
+        "tag": "v1.1.2",
+        "version": "1.1.2",
+        "commit": "00029c7e6f0ae4b69b465caba9ac1447360c29db",
+        "entrypoint": "amplicon_classifier.py",
+        "archive_sha256": "a402b2f5f6584d07fed990fc0d45592b20938343c137aa071f3fed23689df29e",
+        "manifest_sha256": "76e78f9f7ed0de1f69b38263db539e4bbe8a28094bc635a85db8ec3496b5391b"
+      },
+      "selection_reason": "Earlier stable Suite; public release explicitly lists both component versions.",
+      "supported_classes": [
+        "ecDNA",
+        "BFB",
+        "Complex-non-cyclic",
+        "Linear"
+      ],
+      "source_status": "downloaded_verified",
+      "runtime_status": "not_distributed_verify_on_target_system",
+      "evidence_urls": [
+        "https://github.com/AmpliconSuite/AmpliconSuite-pipeline/releases/tag/v1.2.2"
+      ]
+    },
+    {
+      "id": "suite-1.3.3",
+      "suite": {
+        "repo": "https://github.com/AmpliconSuite/AmpliconSuite-pipeline",
+        "tag": "v1.3.3",
+        "version": "1.3.3",
+        "commit": "306ec9b87ac169c5f9bacc034f4f220a6cf179c0",
+        "entrypoint": "AmpliconSuite-pipeline.py",
+        "archive_sha256": "020c611feed63bad8699684f58cf08b9d5cf2283f338299cc40786f3c0e56662",
+        "manifest_sha256": "dd7ec64ff02688368b5d29c32515fbf7422667c1c8a8ffed03addfeb5e687626"
+      },
+      "aa": {
+        "repo": "https://github.com/AmpliconSuite/AmpliconArchitect",
+        "tag": "v1.4.r2",
+        "version": "1.4.r2",
+        "commit": "3a188c49df5ab47cbef97e685bc853a15fbeb1ad",
+        "entrypoint": "src/AmpliconArchitect.py",
+        "archive_sha256": "e5cd74b6b84c6565dad7a417daeec3d1be4f034aae0ccb87abdf1ed15d265ded",
+        "manifest_sha256": "906b3dfb171e142330dc4315607b0cd292c5826aaf51140ce170a5932e4bc61f"
+      },
+      "ac": {
+        "repo": "https://github.com/AmpliconSuite/AmpliconClassifier",
+        "tag": "v1.2.0",
+        "version": "1.2.0",
+        "commit": "3bf856b2961c5ca15e5783c2505b5da5e6bcd464",
+        "entrypoint": "amplicon_classifier.py",
+        "archive_sha256": "5656f9ec9882d3268b3d501783b8c93c15f993c94f5474f726d98619a2dc21bb",
+        "manifest_sha256": "aefe5fab6862cf3827acd27239d98d6b58d8c8cfea0d63cf072206a56e3ac2d3"
+      },
+      "selection_reason": "AA1.4 and AC1.2 update; contrasts observed project1.3.4 / AC1.2.1.",
+      "supported_classes": [
+        "ecDNA",
+        "BFB",
+        "Complex-non-cyclic",
+        "Linear"
+      ],
+      "source_status": "downloaded_verified",
+      "runtime_status": "not_distributed_verify_on_target_system",
+      "evidence_urls": [
+        "https://github.com/AmpliconSuite/AmpliconSuite-pipeline/releases/tag/v1.3.3"
+      ]
+    },
+    {
+      "id": "suite-1.3.4",
+      "suite": {
+        "repo": "https://github.com/AmpliconSuite/AmpliconSuite-pipeline",
+        "tag": "v1.3.4",
+        "commit": "8e71026d799b5ca82604e53838162818b076386d",
+        "version": "1.3.4",
+        "entrypoint": "AmpliconSuite-pipeline.py",
+        "archive_sha256": "6ea71c21728017d3c7a54f06f7e39ed405c6fd51471ecad560131ec110e8ade8",
+        "manifest_sha256": "f5dad16da8dbee52a6545f18b4a47db00d83f127a5c4f09c577804e1382ff9bd"
+      },
+      "aa": {
+        "repo": "https://github.com/AmpliconSuite/AmpliconArchitect",
+        "tag": "v1.4.r2",
+        "commit": "3a188c49df5ab47cbef97e685bc853a15fbeb1ad",
+        "version": "1.4.r2",
+        "entrypoint": "src/AmpliconArchitect.py",
+        "archive_sha256": "e5cd74b6b84c6565dad7a417daeec3d1be4f034aae0ccb87abdf1ed15d265ded",
+        "manifest_sha256": "906b3dfb171e142330dc4315607b0cd292c5826aaf51140ce170a5932e4bc61f"
+      },
+      "ac": {
+        "repo": "https://github.com/AmpliconSuite/AmpliconClassifier",
+        "tag": "v1.2.1",
+        "commit": "a53b3542ec1484f171e2b2f4bc31e59212a4337d",
+        "version": "1.2.1",
+        "entrypoint": "amplicon_classifier.py",
+        "archive_sha256": "09ab6f39f2173a5f60b910a16136b828a613fdfef5944f83a017199014a8c70b",
+        "manifest_sha256": "1c80eda0eccc369f0ce73aac8a130da8f01405a223f0525a4acba0e3f492960e"
+      },
+      "selection_reason": "Documented AA/AC pairing selected for this benchmark. The Suite release alone does not pin these components; actual runtime identities must be verified.",
+      "supported_classes": [
+        "ecDNA",
+        "BFB",
+        "Complex-non-cyclic",
+        "Linear"
+      ],
+      "source_status": "downloaded_verified",
+      "runtime_status": "not_distributed_verify_on_target_system",
+      "evidence_urls": [
+        "https://github.com/AmpliconSuite/AmpliconSuite-pipeline/releases/tag/v1.3.4"
+      ]
+    },
+    {
+      "id": "suite-1.3.7",
+      "suite": {
+        "repo": "https://github.com/AmpliconSuite/AmpliconSuite-pipeline",
+        "tag": "v1.3.7",
+        "version": "1.3.7",
+        "commit": "9f3629430829be260072053bc7de1a3e0a0a1093",
+        "entrypoint": "AmpliconSuite-pipeline.py",
+        "archive_sha256": "baeea730bf732242e480e73c81a587228d9f7fe6d61e11b67757b7960741a81f",
+        "manifest_sha256": "55b0e1c5e7e110cafe404e7ad92c3bdfbaa50c02957ef88686ef918971d93cc1"
+      },
+      "aa": {
+        "repo": "https://github.com/AmpliconSuite/AmpliconArchitect",
+        "tag": "v1.5.r2",
+        "version": "1.5.r2",
+        "commit": "ef45113fcd95db9e75cd4a278f12c8db4a1b7d7f",
+        "entrypoint": "src/AmpliconArchitect.py",
+        "archive_sha256": "071c5f3c9ba0b254c706b8e044a876dbadbeb640b844813607c6c9e668046f89",
+        "manifest_sha256": "10336146769dd3b548df5c57cbd854bb6692a5a1ca92b9d059f127d6fdb9b248"
+      },
+      "ac": {
+        "repo": "https://github.com/AmpliconSuite/AmpliconClassifier",
+        "tag": "v1.3.2",
+        "version": "1.3.2",
+        "commit": "f2d902de43103eee4ad9a7e24ed03720d00efc6c",
+        "entrypoint": "amplicon_classifier.py",
+        "archive_sha256": "a54a91c4fa2aaf4e63e17c7469d4097cadb0601e87614aa163b488facc9327ad",
+        "manifest_sha256": "b439550150a80baef22946ace0f09b98e9d02c25623b59fc6a49fcc9723b512d"
+      },
+      "selection_reason": "AA1.5/AC1.3 algorithm generation before AC1.4 stringency changes.",
+      "supported_classes": [
+        "ecDNA",
+        "BFB",
+        "Complex-non-cyclic",
+        "Linear"
+      ],
+      "source_status": "downloaded_verified",
+      "runtime_status": "not_distributed_verify_on_target_system",
+      "evidence_urls": [
+        "https://github.com/AmpliconSuite/AmpliconSuite-pipeline/releases/tag/v1.3.7"
+      ]
+    },
+    {
+      "id": "suite-1.4.0",
+      "suite": {
+        "repo": "https://github.com/AmpliconSuite/AmpliconSuite-pipeline",
+        "tag": "v1.4.0",
+        "commit": "3817f61043d526fdd57e20db1b26fd1ebbe0e664",
+        "version": "1.4.0",
+        "entrypoint": "AmpliconSuite-pipeline.py",
+        "archive_sha256": "9b64feed9a85e00c070219aaa2ddc041c666fce0c770306b3231e1d3bab0b6df",
+        "manifest_sha256": "6f6544d9082b3d3a6cd52db68babf6358010341221db51021cf6ea91cf20b538"
+      },
+      "aa": {
+        "repo": "https://github.com/AmpliconSuite/AmpliconArchitect",
+        "tag": "v1.5.r3",
+        "commit": "748d78e1a86a0a7742c9577686ffe4157bc3580a",
+        "version": "1.5.r3",
+        "entrypoint": "src/AmpliconArchitect.py",
+        "archive_sha256": "52f63fa5b25eeb41076f893fb5e29aacfe8a59eb3036154859465570dc6ed5cd",
+        "manifest_sha256": "63087a16728668f38f363e53cbed3a48d303509a46ff92d8d1240860e8b76afb"
+      },
+      "ac": {
+        "repo": "https://github.com/AmpliconSuite/AmpliconClassifier",
+        "tag": "v1.4.2",
+        "commit": "24faae1146217d6e8eee7e7bcb3f63b6b085fa28",
+        "version": "1.4.2",
+        "entrypoint": "amplicon_classifier.py",
+        "archive_sha256": "afbdcd56290f50600cddcbc46b20086f4ccc35dac66a57f6efbed6b6b154ae4d",
+        "manifest_sha256": "500420e80e03cd6798f2eae8bd5473260cbe85d02f31d4b2ec52693a6015565f"
+      },
+      "selection_reason": "AC ecDNA stringency and config refactor; Suite release explicitly pairs these components.",
+      "supported_classes": [
+        "ecDNA",
+        "BFB",
+        "Complex-non-cyclic",
+        "Linear"
+      ],
+      "source_status": "downloaded_verified",
+      "runtime_status": "not_distributed_verify_on_target_system",
+      "evidence_urls": [
+        "https://github.com/AmpliconSuite/AmpliconSuite-pipeline/releases/tag/v1.4.0"
+      ]
+    },
+    {
+      "id": "suite-1.5.0",
+      "suite": {
+        "repo": "https://github.com/AmpliconSuite/AmpliconSuite-pipeline",
+        "tag": "v1.5.0",
+        "commit": "a6457444f4889ca640c4fd573244524b442832b2",
+        "version": "1.5.0",
+        "entrypoint": "AmpliconSuite-pipeline.py",
+        "archive_sha256": "f35162d38bc30b30389fed999df81ef2b200543bcb1a3496c97b0256bcd1de5d",
+        "manifest_sha256": "909a4a5204dcc1db489296912d32a76fb36ddae5746021c1bc7d0373fd43d5eb"
+      },
+      "aa": {
+        "repo": "https://github.com/AmpliconSuite/AmpliconArchitect",
+        "tag": "v1.5.r4",
+        "commit": "a7a62d9bfb1f8c6712a46de4a9a3f4d5db749168",
+        "version": "1.5.r4",
+        "entrypoint": "src/AmpliconArchitect.py",
+        "archive_sha256": "ba917356b04d64c57961c1bdbc667677323f1220897a0574a188a6428436e709",
+        "manifest_sha256": "71bdc1fd34106d225a994e4d5a4996d35d859cdc3db71380e164b37a23367680"
+      },
+      "ac": {
+        "repo": "https://github.com/AmpliconSuite/AmpliconClassifier",
+        "tag": "v1.5.1",
+        "commit": "a71670211239d06e496f38d219c48f6fefa459c7",
+        "version": "1.5.1",
+        "entrypoint": "amplicon_classifier.py",
+        "archive_sha256": "935cfd7267652088eb05ed2d20f8696fb1b87d62c6f5be4e409eb3bc60aa4793",
+        "manifest_sha256": "48ca09054164aa263d27cae15001ce6148cd0b728068f2a9c3b7aa53338eaea5"
+      },
+      "selection_reason": "AC interval-end correction and context edge-case fix; Suite release explicitly pairs these components.",
+      "supported_classes": [
+        "ecDNA",
+        "BFB",
+        "Complex-non-cyclic",
+        "Linear"
+      ],
+      "source_status": "downloaded_verified",
+      "runtime_status": "not_distributed_verify_on_target_system",
+      "evidence_urls": [
+        "https://github.com/AmpliconSuite/AmpliconSuite-pipeline/releases/tag/v1.5.0"
+      ]
+    },
+    {
+      "id": "suite-1.5.2",
+      "suite": {
+        "repo": "https://github.com/AmpliconSuite/AmpliconSuite-pipeline",
+        "tag": "v1.5.2",
+        "version": "1.5.2",
+        "commit": "3dfe637eb3de1c522f2b209cbe158034c72be32a",
+        "entrypoint": "AmpliconSuite-pipeline.py",
+        "archive_sha256": "0f8a2b031979840546977ec680da6758ff1e78e54777e9162c9883f50d3310bc",
+        "manifest_sha256": "2970f7623f5f4b01802e43f94a496cc614f28d08dd9236444520770a49882be3"
+      },
+      "aa": {
+        "repo": "https://github.com/AmpliconSuite/AmpliconArchitect",
+        "tag": "v1.5.r6",
+        "version": "1.5.r6",
+        "commit": "b96c77bbb824218f26da05c14e6b0557976f365f",
+        "entrypoint": "src/AmpliconArchitect.py",
+        "archive_sha256": "5c123ff0df7b73cd3a753a787a02ad20e1dd0850ff0b900966d964b6a15619ce",
+        "manifest_sha256": "293d01027e74c1a1ee6c82a1b51e3f8a13b831d33fb007966ab9e516bd3e4e92"
+      },
+      "ac": {
+        "repo": "https://github.com/AmpliconSuite/AmpliconClassifier",
+        "tag": "v1.5.2",
+        "version": "1.5.2",
+        "commit": "b8a0abf1d4ef144ac8ba333052b376db503374e6",
+        "entrypoint": "amplicon_classifier.py",
+        "archive_sha256": "b2291196db65cc8dffc3f8d5dabef6d24a818a2872cf9977be793dc69f8cf17a",
+        "manifest_sha256": "33471e6e54b7bdd29df3490ff9a4de49fb5646ace120f1c7465b6db07dec6ede"
+      },
+      "selection_reason": "AA viral-reference edge-case fix and AC low-copy human-viral/empty-BED fixes.",
+      "supported_classes": [
+        "ecDNA",
+        "BFB",
+        "Complex-non-cyclic",
+        "Linear"
+      ],
+      "source_status": "downloaded_verified",
+      "runtime_status": "not_distributed_verify_on_target_system",
+      "evidence_urls": [
+        "https://github.com/AmpliconSuite/AmpliconSuite-pipeline/releases/tag/v1.5.2"
+      ]
+    },
+    {
+      "id": "suite-1.6.0",
+      "suite": {
+        "repo": "https://github.com/AmpliconSuite/AmpliconSuite-pipeline",
+        "tag": "v1.6.0",
+        "commit": "c11f45d290d03ba61886b4824f1e718d9124e7ff",
+        "version": "1.6.0",
+        "entrypoint": "AmpliconSuite-pipeline.py",
+        "archive_sha256": "564e51d65cadf398c28b0f034c1a3a683a1b2a0effbb70533f61932152a029b8",
+        "manifest_sha256": "eb92c93344a063731f83a12f609d95a69bfd51230b4bf66ede833fa1bf8a611d"
+      },
+      "aa": {
+        "repo": "https://github.com/AmpliconSuite/AmpliconArchitect",
+        "tag": "v1.6.r0",
+        "commit": "f94ab096fc533feb958ee283aa17f6ad1fac56a7",
+        "version": "1.6.r0",
+        "entrypoint": "src/AmpliconArchitect.py",
+        "archive_sha256": "bb25234a129d882170a54fce1e836a50282b791e4db30b083524868d87fd0001",
+        "manifest_sha256": "771345eac610ed1e2b7cc69fc908bfd45224e59447c26a86aa6c7651a39b669c"
+      },
+      "ac": {
+        "repo": "https://github.com/AmpliconSuite/AmpliconClassifier",
+        "tag": "v2.0.0",
+        "commit": "f12309c645c5a5c7a3bbac3fc34fb5f37fdab1ef",
+        "version": "2.0.0",
+        "entrypoint": "amplicon_classifier.py",
+        "archive_sha256": "500247bc56034622132cba34d9728043edd062ba8f527694f8dbb91c3f8e1290",
+        "manifest_sha256": "b0610ecaa4e4c2262caba3875824583b48536c76f109485aabf95c778303228c"
+      },
+      "selection_reason": "Major AC2 FAN and BFBArchitect integration; AA Clarabel option.",
+      "supported_classes": [
+        "ecDNA",
+        "BFB",
+        "Complex-non-cyclic",
+        "Linear",
+        "FAN"
+      ],
+      "source_status": "downloaded_verified",
+      "runtime_status": "not_distributed_verify_on_target_system",
+      "evidence_urls": [
+        "https://github.com/AmpliconSuite/AmpliconSuite-pipeline/releases/tag/v1.6.0"
+      ],
+      "bfb": {
+        "repo": "https://github.com/AmpliconSuite/BFBArchitect",
+        "tag": "v1.0.1",
+        "commit": "f3305b9e3cf07f57e128ee0d8421f3e56e1e1e01",
+        "version": "1.0.1",
+        "entrypoint": "BFBArchitect.py",
+        "archive_sha256": "80eb188078de839ee91577ba50e686df2fb3075d834f034b45e76ac769d0a70b",
+        "manifest_sha256": "ebfd76f3e1e90cbc3e88d48fd1138cfb750d684ddeb04b288ce92de0eaefae8e"
+      }
+    },
+    {
+      "id": "suite-1.6.1",
+      "suite": {
+        "repo": "https://github.com/AmpliconSuite/AmpliconSuite-pipeline",
+        "tag": "v1.6.1",
+        "commit": "cd822b91e00a65fec5aabe9989a29bdde084ecc4",
+        "version": "1.6.1",
+        "entrypoint": "AmpliconSuite-pipeline.py",
+        "archive_sha256": "85f0fd9f19f1fa74b1538fd3064f0a2255541f67babcd757516cd72f4910b426",
+        "manifest_sha256": "ac533642d0c81157afb4affae81eda01e5faf16eeeab315964e3f5c4cf4f858a"
+      },
+      "aa": {
+        "repo": "https://github.com/AmpliconSuite/AmpliconArchitect",
+        "tag": "v1.6.r1",
+        "commit": "79dc3ea81e9bd7c00d424fb61ff9d0c9c4f3afc1",
+        "version": "1.6.r1",
+        "entrypoint": "src/AmpliconArchitect.py",
+        "archive_sha256": "ae0b97024bb976a18916d06072ff3fdfd2618d9780baf2a129338f754b77e56d",
+        "manifest_sha256": "f61b18999f5e5a9b0010bcc1786fbff9df152a0c6ef88a34b834b481630eb585"
+      },
+      "ac": {
+        "repo": "https://github.com/AmpliconSuite/AmpliconClassifier",
+        "tag": "v2.0.0",
+        "commit": "f12309c645c5a5c7a3bbac3fc34fb5f37fdab1ef",
+        "version": "2.0.0",
+        "entrypoint": "amplicon_classifier.py",
+        "archive_sha256": "500247bc56034622132cba34d9728043edd062ba8f527694f8dbb91c3f8e1290",
+        "manifest_sha256": "b0610ecaa4e4c2262caba3875824583b48536c76f109485aabf95c778303228c"
+      },
+      "selection_reason": "Reproducible read downsampling; prior project comparison run.",
+      "supported_classes": [
+        "ecDNA",
+        "BFB",
+        "Complex-non-cyclic",
+        "Linear",
+        "FAN"
+      ],
+      "source_status": "downloaded_verified",
+      "runtime_status": "not_distributed_verify_on_target_system",
+      "evidence_urls": [
+        "https://github.com/AmpliconSuite/AmpliconSuite-pipeline/releases/tag/v1.6.1"
+      ],
+      "bfb": {
+        "repo": "https://github.com/AmpliconSuite/BFBArchitect",
+        "tag": "v1.0.1",
+        "commit": "f3305b9e3cf07f57e128ee0d8421f3e56e1e1e01",
+        "version": "1.0.1",
+        "entrypoint": "BFBArchitect.py",
+        "archive_sha256": "80eb188078de839ee91577ba50e686df2fb3075d834f034b45e76ac769d0a70b",
+        "manifest_sha256": "ebfd76f3e1e90cbc3e88d48fd1138cfb750d684ddeb04b288ce92de0eaefae8e"
+      }
+    },
+    {
+      "id": "suite-1.6.2",
+      "suite": {
+        "repo": "https://github.com/AmpliconSuite/AmpliconSuite-pipeline",
+        "tag": "v1.6.2",
+        "commit": "9b6cf5696ddc7e6d9bb8bea3ee15dd11cd04ce94",
+        "version": "1.6.2",
+        "entrypoint": "AmpliconSuite-pipeline.py",
+        "archive_sha256": "c5ba357a26f80368473e9359e4ef6306318e8bc10f1e160d1a38597562e9951b",
+        "manifest_sha256": "3d21041b93120e3d8574de9a3bebcb181890e10e46461f5df7bbd919d6620337"
+      },
+      "aa": {
+        "repo": "https://github.com/AmpliconSuite/AmpliconArchitect",
+        "tag": "v1.6.r2",
+        "commit": "c3350be450bd24bbd34891428be1dce1c78a059b",
+        "version": "1.6.r2",
+        "entrypoint": "src/AmpliconArchitect.py",
+        "archive_sha256": "af2205378296ec80ba62f24153300ee16a2acaa050b4939bed88ca63c6b32279",
+        "manifest_sha256": "184a9c8a3d5be5f685a062e50d824403f24ca67711f7938a02c7648b2486b061"
+      },
+      "ac": {
+        "repo": "https://github.com/AmpliconSuite/AmpliconClassifier",
+        "tag": "v2.0.1",
+        "commit": "2ec0c146f78e74b4857860fc30b5e8a1de7920b7",
+        "version": "2.0.1",
+        "entrypoint": "amplicon_classifier.py",
+        "archive_sha256": "10bdbbea4dd5a30b2620eb84e4be9881f006cbbe1770e14b19c1b0862dd42135",
+        "manifest_sha256": "c5c9ff86232a45a860d32d0e67b4ca36b8cc9402118fd3c0695b268f5ee19833"
+      },
+      "selection_reason": "Latest non-prerelease confirmed by live GitHub API on 2026-11-17; fixed reference.",
+      "supported_classes": [
+        "ecDNA",
+        "BFB",
+        "Complex-non-cyclic",
+        "Linear",
+        "FAN"
+      ],
+      "source_status": "downloaded_verified",
+      "runtime_status": "not_distributed_verify_on_target_system",
+      "evidence_urls": [
+        "https://github.com/AmpliconSuite/AmpliconSuite-pipeline/releases/tag/v1.6.2"
+      ],
+      "bfb": {
+        "repo": "https://github.com/AmpliconSuite/BFBArchitect",
+        "tag": "v1.0.2",
+        "commit": "f7add60e6125105cbfc98042cefcefb9a85587e3",
+        "version": "1.0.2",
+        "entrypoint": "BFBArchitect.py",
+        "archive_sha256": "fb8bfcf31dcb1237861bb4b2841bddee779c2be6b57c8b80d53962078f0e4e53",
+        "manifest_sha256": "f941acf0faab40678a115e6e4d4da610ae525b5d7ac8c0eee33219c026d5e8eb"
+      }
+    }
+  ],
+  "excluded": [
+    {
+      "version": "AC legacy_natgen_2020",
+      "reason": "Different output schema; no validated adapter. Source available in official repository; not silently replaced."
+    }
+  ]
+}

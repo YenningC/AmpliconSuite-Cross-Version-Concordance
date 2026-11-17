@@ -1,0 +1,3 @@
+Sample name	Feature ID	Classification	Location	Feature median copy number	Oncogenes	All genes
+SYNTHETIC	ref_ecDNA_1	ecDNA	['chr1:1000-11000']	8	[]	[]
+SYNTHETIC	ref_Linear_1	Linear	['chr2:1000-5000']	7	[]	[]

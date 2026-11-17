@@ -1,0 +1,30 @@
+{
+  "date": "2026-11-17",
+  "program_version": "0.2.0",
+  "distribution": "GitHub source package",
+  "regression_tests": {
+    "discovered": 219,
+    "passed": 218,
+    "skipped": 1,
+    "failed": 0,
+    "log_sha256": "ce70494284ec8a60a1bd05ba1e4c998b8085155618d901b576f6fd1ebd44cf62"
+  },
+  "installation": {
+    "passed": true,
+    "commands_passed": 8,
+    "wheel_sha256": "a5dfad76920133c492c828ba4bec5086a4dd19bc0ee75322935e99e8be5215b4",
+    "evidence_sha256": "dab64463137ebc896ff8068ec2026e5eeade62dd17b45076aa19f89eab7e29ac",
+    "outside_source_directory": true,
+    "scope": "new venv outside source directory; scientific dependencies explicitly reused by .pth"
+  },
+  "document_links": {
+    "checked": 45,
+    "broken": 0
+  },
+  "scientific_python_implementation_unchanged": true,
+  "locked_component_versions_commits_and_hashes_unchanged": true,
+  "source_lock_descriptive_notes": "Generalized internal provenance comments and removed deployment-specific status notes; component identities unchanged",
+  "ci_configuration_included": true,
+  "github_hosted_ci_executed": false,
+  "scope": "Software and synthetic validation only; no new patient analysis or compatibility conclusion"
+}

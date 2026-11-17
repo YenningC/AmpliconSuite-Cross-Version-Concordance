@@ -1,0 +1,4 @@
+[
+  {"version": "0.9.10", "python": "/env/cnvkit-0.9.10/bin/python", "script": "/env/cnvkit-0.9.10/bin/cnvkit.py"},
+  {"version": "0.9.13", "python": "/env/cnvkit-0.9.13/bin/python", "script": "/env/cnvkit-0.9.13/bin/cnvkit.py"}
+]

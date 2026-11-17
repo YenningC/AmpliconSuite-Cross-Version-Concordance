@@ -1,0 +1,3 @@
+Segment	1	chr1	1000	10999
+Segment	2	chr2	1000	4999
+Cycle=1;Copy_count=8;Segments=1+,2-

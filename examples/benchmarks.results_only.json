@@ -1,0 +1,23 @@
+{
+  "mode": "results_only",
+  "reference_version": "suite-1.6.2",
+  "target_versions": ["suite-1.6.0", "suite-1.6.2"],
+  "samples": [{
+    "sample_id": "EXAMPLE_01",
+    "source_version": "suite-1.6.0",
+    "reference_build": "hg19",
+    "source_result": {
+      "aa_dir": "/data/EXAMPLE_01/suite-1.6.0/aa",
+      "ac_dir": "/data/EXAMPLE_01/suite-1.6.0/ac",
+      "component_versions": {"aa": "1.6.r0", "ac": "2.0.0"}
+    },
+    "comparison_results": [{
+      "version": "suite-1.6.2",
+      "aa_dir": "/data/EXAMPLE_01/suite-1.6.2/aa",
+      "ac_dir": "/data/EXAMPLE_01/suite-1.6.2/ac",
+      "component_versions": {"aa": "1.6.r2", "ac": "2.0.1"}
+    }]
+  }],
+  "runtimes": [],
+  "statistics": {"min_samples": 20, "margins": {}, "upstream_loss_margin": null}
+}
