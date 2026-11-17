@@ -19,8 +19,8 @@ For sample analysis, use `asconcordance check/run/report`. The old `ascompare ru
 Packaging example; use a new directory outside the repository:
 
 ```sh
-python -m pip install 'setuptools>=68' wheel
+python -m pip install 'setuptools>=77' wheel
 python scripts/package_program.py --out ../concordance-release --wheel
 ```
 
-The packaging allowlist does not constitute an automatic sensitive-data detector. Keep actual inputs, manifests and outputs outside the source tree. No license is chosen by the packager.
+The packaging allowlist does not constitute an automatic sensitive-data detector. Keep actual inputs, manifests and outputs outside the source tree. Both the source archive and the wheel include the repository’s MIT license.
