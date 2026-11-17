@@ -1,0 +1,56 @@
+# Python/build tools
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Local configuration, credentials and solver licenses
+.env
+.env.*
+*.local.json
+*.local.tsv
+*.local.yml
+*.local.yaml
+*.lic
+*.pem
+*.key
+
+# Inputs, working environments and generated analysis results
+data/
+resources/
+work/
+outputs/
+runs/
+demo_output/
+demo_output_synthetic_inputs/
+runtime_probes*/
+*.bam
+*.bai
+*.cram
+*.crai
+*.sam
+*.fastq
+*.fastq.gz
+*.fq
+*.fq.gz
+*.fasta
+*.fa
+*.fai
+*.cnr
+*.cns
+*.bed
+*.log
+!examples/**/*.bed
+
+# OS/editor files
+.DS_Store
+._*
+.idea/
+.vscode/
