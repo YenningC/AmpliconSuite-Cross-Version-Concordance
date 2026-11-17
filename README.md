@@ -6,7 +6,7 @@
 
 AmpliconSuite Cross-Version Concordance is an independent, local research tool. It compares existing AmpliconSuite outputs, orchestrates selected-seed AA/AC runs, and evaluates whether known candidate seeds remain selected after local CNVkit reassessment. It produces per-sample similarity ladders, paired difference tables and compatibility reports.
 
-**Version:** 0.3.1 · **Fixed reference:** Suite **1.6.2**, AA **1.6.r2**, AC **2.0.1**. The reference is frozen; installing a newer upstream release does not change it. This project is not an official AmpliconSuite component.
+**Version:** 0.3.2 · **Fixed reference:** Suite **1.6.2**, AA **1.6.r2**, AC **2.0.1**. The reference is frozen; installing a newer upstream release does not change it. This project is not an official AmpliconSuite component.
 
 > Similarity describes observed software outputs. It is not a probability of biological truth or proof that complete workflows are interchangeable. Compatibility remains **insufficient evidence** when margins are unspecified or evidence is inadequate.
 
@@ -67,7 +67,7 @@ asconcordance report --out runs/comparison
 
 Paths are resolved relative to the manifest. Output must be separate from inputs and resources. Results can be specified with `aa_dir`/`ac_dir`, a `run_dir` containing `aa` and `ac`, or a recognizable Suite `result_dir`; ambiguous directories are rejected. Keep the original graph, cycles, summary, classification profiles and feature BED files where available. An image or summary label alone is insufficient.
 
-`check` inspects input declarations, coordinates, BAM headers, existing indexes and small result-file formats. `import_format_check.tsv` lists AA/AC file counts, headings and matching issues. `run` also checks real component versions and source identities. `report` redraws saved, integrity-checked records from the same program version without accessing BAM. Use a new output directory for runs started with an earlier release. Version 0.3.1 can redraw verified 0.3.0 reports. A completed command/report does not imply that every scientific job succeeded: inspect coverage and failure tables.
+`check` inspects input declarations, coordinates, BAM headers, existing indexes and small result-file formats. `import_format_check.tsv` lists AA/AC file counts, headings and matching issues. `run` also checks real component versions and source identities. `report` redraws saved, integrity-checked records from the same program version without accessing BAM. Use a new output directory for runs started with an earlier release. Version 0.3.2 can redraw verified reports from 0.3.0 and 0.3.1. A completed command/report does not imply that every scientific job succeeded: inspect coverage and failure tables.
 
 See the [server guide](docs/server_quickstart.md), [environment instructions](docs/environment_setup.md) and [local CNV calibration requirements](docs/local_cnv_calibration.md) for runtime configuration. These detailed technical notes are currently in Chinese; commands and configuration keys are shared across both languages.
 
@@ -173,4 +173,4 @@ Independent adapters for [EC-comparator](https://github.com/AmpliconSuite/EC-com
 
 This repository contains no patient data, private configurations, reference genomes, upstream algorithm environments or solver licenses. Keep actual analysis manifests, inputs and generated results outside version control.
 
-**Prior written permission is required for use of this project’s original code**, subject to the published notice. Requests can use the contact listed there. Third-party tools retain their own terms. [Permission notice](LICENSE_STATUS.md) · [Repository upload instructions](GITHUB_UPLOAD.md).
+The project's original code and documentation are available under the **MIT License**. Third-party components follow their own licenses. [MIT License](LICENSE) · [Repository upload instructions](GITHUB_UPLOAD.md).

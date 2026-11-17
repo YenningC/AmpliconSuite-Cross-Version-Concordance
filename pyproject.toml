@@ -1,11 +1,13 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 [project]
 name = "ampliconsuite-cross-version-concordance"
-version = "0.3.1"
+version = "0.3.2"
 description = "AmpliconSuite Cross-Version Concordance: assess version differences at selected regions"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
 dependencies = ["numpy>=1.24,<3", "scipy>=1.10,<2", "matplotlib>=3.7,<4", "pysam>=0.22,<0.25"]
 [project.scripts]

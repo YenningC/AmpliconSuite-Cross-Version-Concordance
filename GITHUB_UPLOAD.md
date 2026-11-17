@@ -31,6 +31,6 @@ git push -u origin main
 
 ## 许可证与发布附件
 
-使用项目原创代码须按公开声明取得事先书面许可，申请信息见 `LICENSE_STATUS.md`。
+项目原创代码和文档采用 [MIT 许可证](LICENSE)。重新分发时保留版权和许可证声明。
 
 可以在仓库 Release 中另附 wheel、源码 ZIP/TAR.GZ 及 SHA-256 清单。0.3.0 新增报告和解析能力。请等候 Actions 测试完成，并保留 0.2.0 历史发布包以便复现旧分析。

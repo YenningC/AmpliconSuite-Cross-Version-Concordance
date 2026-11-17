@@ -769,7 +769,7 @@ def main(argv=None):
             from .concordance_report import write_concordance_reports
             out = Path(args.out).resolve()
             run_version = json.loads((out / 'provenance.json').read_text()).get('program_version')
-            if run_version not in {PROGRAM_VERSION, '0.3.0'}:
+            if run_version not in {PROGRAM_VERSION, '0.3.0', '0.3.1'}:
                 raise ValueError('Use the original program version to redraw this report, or run the manifest into a new output directory')
             expected = json.loads((out / 'report_inputs.sha256.json').read_text())
             if not all((out / name).is_file() and digest(out / name) == value for name, value in expected.items()):

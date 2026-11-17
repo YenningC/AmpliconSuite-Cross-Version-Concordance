@@ -24,7 +24,7 @@ def main():
     source=args.source.resolve();out=args.out.resolve()
     if source==out or source in out.parents:
         parser.error('Output must be outside the repository')
-    required=('README.md','README.zh-CN.md','GITHUB_UPLOAD.md','LICENSE_STATUS.md','.gitignore',
+    required=('README.md','README.zh-CN.md','GITHUB_UPLOAD.md','LICENSE','.gitignore',
               'pyproject.toml','requirements.txt','versions.lock.json','official_tools.lock.json','validation_summary.json')
     files=[]
     for name in required:
@@ -41,7 +41,7 @@ def main():
                 if any(s in rel.lower() for s in ('runtimes.local','runtime_probes','archive_v0.1','memory.md')):
                     parser.error('Internal/local file in public allowlist: '+rel)
                 files.append(p)
-    for name in ('LICENSE','repository_validation.json'):
+    for name in ('repository_validation.json',):
         p=source/name
         if p.is_file():
             if p.is_symlink():parser.error('Refusing symlink: '+name)
