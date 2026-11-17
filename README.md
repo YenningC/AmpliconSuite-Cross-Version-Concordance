@@ -153,7 +153,7 @@ Repeat the same `run` command to resume. Successful caches are checked against r
 
 The 0.3.0 regression exercises independent upstream calibration, patient-level aggregation, exploratory comparisons, the paired change summary and partial native results. Actual CNVkit 0.9.10 and 0.9.13 completed synthetic BAM tests. Suite 1.5.3 has an audited source lock and local component launch evidence.
 
-The published environment image passed Linux integration checks for the pinned Benchmarks 0.2.0 checkout. Real-patient bounded AA reconstruction, patient-level compatibility and the 0.3.0 hosted Linux check remain pending. [Validation details](docs/validation_status.md) · [Machine-readable evidence](validation_summary.json)
+GitHub Actions passed the Python 3.10 and 3.12 synthetic regressions and the Linux amd64 0.3.0 environment checks. Real-patient bounded AA reconstruction and patient-level compatibility remain unverified. [Validation details](docs/validation_status.md) · [Setup and Docker image](https://github.com/YenningC/AmpliconSuite-Benchmarks-Environments)
 
 ```sh
 python -m unittest discover -s tests -v

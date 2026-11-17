@@ -123,7 +123,7 @@ asbench report --out runs/comparison
 
 0.3.0 回归覆盖独立校准、患者聚类、探索性比较、配对差异首页和部分原生结果解析。真实 CNVkit 0.9.10 和 0.9.13 已用人工 BAM 验证局部流程。Suite 1.5.3 具备核验过的源码锁和本机组件启动证据。
 
-现有公开镜像通过了固定 0.2.0 源码的 Linux 测试。真实患者重建、队列兼容和 0.3.0 的托管 Linux 测试仍待验证。 [验证详情](docs/validation_status.md) · [机器可读记录](validation_summary.json)
+GitHub Actions 已通过 Python 3.10 和 3.12 的人工数据回归测试，以及 0.3.0 环境的 Linux amd64 测试。真实患者重建和队列兼容仍待验证。 [验证详情](docs/validation_status.md) · [环境和镜像安装说明](https://github.com/YenningC/AmpliconSuite-Benchmarks-Environments)
 
 ```sh
 python -m unittest discover -s tests -v
