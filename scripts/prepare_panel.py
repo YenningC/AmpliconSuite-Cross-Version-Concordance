@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fetch only locked public sources. Installed equivalent: asbench prepare-panel."""
+"""Fetch only locked public sources. Installed equivalent: asconcordance prepare-panel."""
 import argparse
 from pathlib import Path
 import sys

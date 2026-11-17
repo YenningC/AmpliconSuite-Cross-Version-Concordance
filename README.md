@@ -6,7 +6,7 @@
 
 AmpliconSuite Cross-Version Concordance is an independent, local research tool. It compares existing AmpliconSuite outputs, orchestrates selected-seed AA/AC runs, and evaluates whether known candidate seeds remain selected after local CNVkit reassessment. It produces per-sample similarity ladders, paired difference tables and compatibility reports.
 
-**Version:** 0.3.0 · **Fixed reference:** Suite **1.6.2**, AA **1.6.r2**, AC **2.0.1**. The reference is frozen; installing a newer upstream release does not change it. This project is not an official AmpliconSuite component.
+**Version:** 0.3.1 · **Fixed reference:** Suite **1.6.2**, AA **1.6.r2**, AC **2.0.1**. The reference is frozen; installing a newer upstream release does not change it. This project is not an official AmpliconSuite component.
 
 > Similarity describes observed software outputs. It is not a probability of biological truth or proof that complete workflows are interchangeable. Compatibility remains **insufficient evidence** when margins are unspecified or evidence is inadequate.
 
@@ -32,7 +32,7 @@ Local CNVkit requires an explicit background BED. The default `matched_normal` s
 
 ## Quick start
 
-The package is installed as `ampliconsuite-benchmarks` and the command is `asbench`.
+The Python distribution is `ampliconsuite-cross-version-concordance`. Install it in a fresh virtual environment and run `asconcordance`.
 
 Run these commands from the extracted repository root on Linux or macOS:
 
@@ -40,34 +40,34 @@ Run these commands from the extracted repository root on Linux or macOS:
 python3 -m venv .venv
 . .venv/bin/activate
 python -m pip install .
-asbench --help
-asbench versions
-asbench demo --out demo_output
+asconcordance --help
+asconcordance versions
+asconcordance demo --out demo_output
 ```
 
 Open `demo_output/report.md`. The demo creates **synthetic result files** and uses the public comparison/reporting workflow. It needs no patient data, BAM, AA or AC installation. **It does not execute AA or AC and is not a biological validation dataset.** Use a new output path for another demo.
 
-Requirements: Python **3.10+**, NumPy, SciPy, Matplotlib and pysam. Installing this package installs the comparison dependencies; it does **not** install AmpliconSuite components, reference resources or commercial solver licenses. The Python module entry point is `python -m ascompare.benchmark`.
+Requirements: Python **3.10+**, NumPy, SciPy, Matplotlib and pysam. Installing this package installs the comparison dependencies; it does **not** install AmpliconSuite components, reference resources or commercial solver licenses. The Python module entry point is `python -m ascompare.concordance`.
 
 ### Configure a real comparison
 
 Start with one of these templates:
 
-- [`benchmarks.results_only.json`](examples/benchmarks.results_only.json): compare multiple existing outputs without BAM or algorithm environments.
-- [`benchmarks.ac_only.json`](examples/benchmarks.ac_only.json): rerun AC on one existing AA reconstruction; requires the specified AC environments and reference resources.
-- [`benchmarks.with_bam.json`](examples/benchmarks.with_bam.json): local CNVkit and selected-seed AA/AC; requires explicit component runtimes.
+- [`concordance.results_only.json`](examples/concordance.results_only.json): compare multiple existing outputs without BAM or algorithm environments.
+- [`concordance.ac_only.json`](examples/concordance.ac_only.json): rerun AC on one existing AA reconstruction; requires the specified AC environments and reference resources.
+- [`concordance.with_bam.json`](examples/concordance.with_bam.json): local CNVkit and selected-seed AA/AC; requires explicit component runtimes.
 
 ```sh
-cp examples/benchmarks.results_only.json benchmarks.local.json
-# Edit benchmarks.local.json with your local paths and version declarations.
-asbench check --manifest benchmarks.local.json --out runs/comparison
-asbench run --manifest benchmarks.local.json --out runs/comparison
-asbench report --out runs/comparison
+cp examples/concordance.results_only.json concordance.local.json
+# Edit concordance.local.json with your local paths and version declarations.
+asconcordance check --manifest concordance.local.json --out runs/comparison
+asconcordance run --manifest concordance.local.json --out runs/comparison
+asconcordance report --out runs/comparison
 ```
 
 Paths are resolved relative to the manifest. Output must be separate from inputs and resources. Results can be specified with `aa_dir`/`ac_dir`, a `run_dir` containing `aa` and `ac`, or a recognizable Suite `result_dir`; ambiguous directories are rejected. Keep the original graph, cycles, summary, classification profiles and feature BED files where available. An image or summary label alone is insufficient.
 
-`check` inspects input declarations, coordinates, BAM headers, existing indexes and small result-file formats. `import_format_check.tsv` lists AA/AC file counts, headings and matching issues. `run` also checks real component versions and source identities. `report` redraws saved, integrity-checked records from the same program version without accessing BAM. Use a new output directory when upgrading from 0.2.0. A completed command/report does not imply that every scientific job succeeded: inspect coverage and failure tables.
+`check` inspects input declarations, coordinates, BAM headers, existing indexes and small result-file formats. `import_format_check.tsv` lists AA/AC file counts, headings and matching issues. `run` also checks real component versions and source identities. `report` redraws saved, integrity-checked records from the same program version without accessing BAM. Use a new output directory for runs started with an earlier release. Version 0.3.1 can redraw verified 0.3.0 reports. A completed command/report does not imply that every scientific job succeeded: inspect coverage and failure tables.
 
 See the [server guide](docs/server_quickstart.md), [environment instructions](docs/environment_setup.md) and [local CNV calibration requirements](docs/local_cnv_calibration.md) for runtime configuration. These detailed technical notes are currently in Chinese; commands and configuration keys are shared across both languages.
 
@@ -110,7 +110,7 @@ Source-Suite reruns are compared with the supplied original results. Upstream ca
 | 1.6.1 | 1.6.r1 | 2.0.0 | 1.0.1 | 0.9.13 |
 | **1.6.2 — reference** | **1.6.r2** | **2.0.1** | **1.0.2** | **0.9.13** |
 
-These are explicit benchmark component recipes. Source commits, archive hashes and source-manifest hashes are recorded in [`versions.lock.json`](versions.lock.json); CNVkit build-recipe evidence is in [`builtin_cnvkit_map.json`](ascompare/builtin_cnvkit_map.json). A Suite label or image name alone does not prove its installed components. Historical versions are never silently replaced. See [version evidence](docs/version_evidence.md) for qualifications, including Suite 1.3.4 and the separate legacy diagnostic recipe.
+These are explicit comparison component recipes. Source commits, archive hashes and source-manifest hashes are recorded in [`versions.lock.json`](versions.lock.json); CNVkit build-recipe evidence is in [`builtin_cnvkit_map.json`](ascompare/builtin_cnvkit_map.json). A Suite label or image name alone does not prove its installed components. Historical versions are never silently replaced. See [version evidence](docs/version_evidence.md) for qualifications, including Suite 1.3.4 and the separate legacy diagnostic recipe.
 
 CNVkit 0.9.14 is supported only as an explicitly identified controlled condition, not a substitute for those historical recipes. Historical AA requires an appropriate Mosek installation/license. See the validation record for the separate evidence levels: source lock, runtime launch, synthetic component test and real-sample workflow. For a downsampling reproducibility comparison, see the [cohort study guide](docs/cohort_study.md).
 
@@ -139,7 +139,7 @@ Execution failures, missing files and unsupported classes remain distinct from t
 | Output | Contents |
 |---|---|
 | `report.md`, `summary.json` | Paired effects, denominators, source/reference identities and evidence |
-| `import_format_check.tsv` | Small-file format audit from `asbench check` |
+| `import_format_check.tsv` | Small-file format audit from `asconcordance check` |
 | `similarity_ladder.*`, `sample_ladders/` | Aggregate and per-sample ladders in PNG/PDF/SVG |
 | `sample_plot_index.tsv`, `sample_similarity.tsv` | Plot paths, observed similarities and evaluation status |
 | `compatibility_table.*`, `compatibility_combined.tsv` | Three-state compatibility summaries |
@@ -155,7 +155,7 @@ Repeat the same `run` command to resume. Successful caches are checked against r
 
 The 0.3.0 regression exercises independent upstream calibration, patient-level aggregation, exploratory comparisons, the paired change summary and partial native results. Actual CNVkit 0.9.10 and 0.9.13 completed synthetic BAM tests. Suite 1.5.3 has an audited source lock and local component launch evidence.
 
-GitHub Actions passed the Python 3.10 and 3.12 synthetic regressions and the Linux amd64 0.3.0 environment checks. Real-patient bounded AA reconstruction and patient-level compatibility remain unverified. [Validation details](docs/validation_status.md) · [Setup and Docker image](https://github.com/YenningC/AmpliconSuite-Benchmarks-Environments)
+GitHub Actions passed the Python 3.10 and 3.12 synthetic regressions and the Linux amd64 0.3.0 environment checks. Real-patient bounded AA reconstruction and patient-level compatibility remain unverified. [Validation details](docs/validation_status.md) · [Setup and Docker image](https://github.com/YenningC/AmpliconSuite-Cross-Version-Concordance-Environments)
 
 ```sh
 python -m unittest discover -s tests -v
@@ -165,11 +165,11 @@ Default tests create temporary synthetic inputs and do not download upstream too
 
 ## Official comparison tools
 
-Independent adapters for [EC-comparator](https://github.com/AmpliconSuite/EC-comparator) and AC's `results_comparator.py` are retained for optional structural diagnostics. `asbench` does not automatically invoke them or turn their scores into compatibility thresholds. See [tool evaluation and commands](docs/official_comparison_tools.md).
+Independent adapters for [EC-comparator](https://github.com/AmpliconSuite/EC-comparator) and AC's `results_comparator.py` are retained for optional structural diagnostics. `asconcordance` does not automatically invoke them or turn their scores into compatibility thresholds. See [tool evaluation and commands](docs/official_comparison_tools.md).
 
 ## Repository and licensing
 
-`ascompare/` contains the implementation; `tests/` contains regression tests; `examples/` contains templates and synthetic fixtures; `scripts/` contains runtime preparation and packaging utilities. Some internal modules are retained for regression coverage, but the old `ascompare run/check` genome-wide workflow is disabled. Use `asbench` for this release.
+`ascompare/` contains the implementation; `tests/` contains regression tests; `examples/` contains templates and synthetic fixtures; `scripts/` contains runtime preparation and packaging utilities. Some internal modules are retained for regression coverage, but the old `ascompare run/check` genome-wide workflow is disabled. Use `asconcordance` for this release.
 
 This repository contains no patient data, private configurations, reference genomes, upstream algorithm environments or solver licenses. Keep actual analysis manifests, inputs and generated results outside version control.
 

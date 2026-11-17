@@ -6,7 +6,7 @@ import tempfile
 import unittest
 
 import pysam
-from ascompare.benchmark_policy import guarded_command
+from ascompare.concordance_policy import guarded_command
 
 
 class BoundedPolicyTests(unittest.TestCase):

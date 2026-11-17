@@ -1,11 +1,11 @@
 # 0.2 环境与依赖
 
-比较/报告环境需Python≥3.10及requirements.txt中的NumPy、SciPy、Matplotlib、pysam。AA/AC/CNVkit各自使用显式解释器，不能由PATH猜版本。安装源码包或wheel后使用asbench；ascompare仅用于公共源码准备等辅助功能，不用于真实样本启动。
+比较/报告环境需Python≥3.10及requirements.txt中的NumPy、SciPy、Matplotlib、pysam。AA/AC/CNVkit各自使用显式解释器，不能由PATH猜版本。安装源码包或wheel后使用asconcordance；ascompare仅用于公共源码准备等辅助功能，不用于真实样本启动。
 
 ```sh
 python3 -m venv .venv
 .venv/bin/python -m pip install .
-.venv/bin/asbench demo --out /absolute/output/SYNTHETIC_demo
+.venv/bin/asconcordance demo --out /absolute/output/SYNTHETIC_demo
 . .venv/bin/activate
 ```
 
@@ -17,7 +17,7 @@ python3 -m venv .venv
 
 ```sh
 ascompare prepare --version suite-1.6.2 --out /absolute/work/locked_sources
-asbench prepare-panel --out /absolute/work/locked_sources
+asconcordance prepare-panel --out /absolute/work/locked_sources
 ```
 
 第一条只获取一个版本；第二条获取锁内面板，生成prepared_panel.json。只下载公共软件，不读取患者数据。锁内源码归档、commit及逐文件清单均核对，不用镜像标签推测版本。算法不在安装包内，以免未经核验的软件替代原版。

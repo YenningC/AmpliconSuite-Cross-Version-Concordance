@@ -1,6 +1,6 @@
 # 官方比较工具复用评估
 
-**当前范围：**本仓库保留以下独立适配器。`asbench` 不自动执行 `compare_completed_records` 或把官方距离合入兼容判定；主报告使用可审计的检出、多标签及区段指标。需要路径/断点诊断时，按本页独立命令对已完成结果运行；不读取BAM或启动全基因组操作。
+**当前范围：**本仓库保留以下独立适配器。`asconcordance` 不自动执行 `compare_completed_records` 或把官方距离合入兼容判定；主报告使用可审计的检出、多标签及区段指标。需要路径/断点诊断时，按本页独立命令对已完成结果运行；不读取BAM或启动全基因组操作。
 
 核查日期：2026-11-17。评估的官方工具为 **EC-comparator** 与 AmpliconClassifier 的 **`results_comparator.py`**。本项目为独立工具，不代表官方对本基准或统计结论的认可。
 
@@ -101,7 +101,7 @@ python3.10 -m venv /path/ec-env
 
 未配置的工具不运行。历史版本没有 native result table 时明确记 `missing`；主流程失败记 `not_evaluable`，不生成假阴性表。对于使用 `__whole_sample__` 标识的整样本已完成结果（诊断目录映射为 `whole_sample`），EC 默认允许比较多个 amplicon 的独立结构集合；对于固定种子结果，需设置 `allow_multiple_amplicons=true` 才进行多 amplicon 集合比较，否则记 `unsupported`。也可以显式设为false关闭集合比较。不会按输出文件顺序连接两个 amplicon，也不会把集合分值说成一一对应结构相同。
 
-适配器回归覆盖上述保护、官方 metrics schema、标量指标单位/方向/状态及绘图失败隔离，见 `tests/test_official_compare.py`。显式调用自动配对 helper 时，会在其输出的 `official_comparisons/` 下生成 `official_metrics.tsv`；这不是 `asbench` 默认输出的一部分。
+适配器回归覆盖上述保护、官方 metrics schema、标量指标单位/方向/状态及绘图失败隔离，见 `tests/test_official_compare.py`。显式调用自动配对 helper 时，会在其输出的 `official_comparisons/` 下生成 `official_metrics.tsv`；这不是 `asconcordance` 默认输出的一部分。
 
 ## 逐样本官方距离天梯图
 

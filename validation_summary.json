@@ -68,16 +68,16 @@
   "patient_aa_ac_run_complete": false,
   "hosted_linux_ci_0_3_0_verified": true,
   "hosted_linux_ci_0_3_0": {
-    "benchmarks_commit": "61a720bcf4de25ac5103961cbd80dd4bef315b34",
-    "python_regression_run": "https://github.com/YenningC/AmpliconSuite-Benchmarks/actions/runs/44041256493",
-    "environment_test_run": "https://github.com/YenningC/AmpliconSuite-Benchmarks-Environments/actions/runs/44041555708",
-    "environment_publish_run": "https://github.com/YenningC/AmpliconSuite-Benchmarks-Environments/actions/runs/44042036496",
+    "source_commit": "61a720bcf4de25ac5103961cbd80dd4bef315b34",
+    "python_regression_run": "https://github.com/YenningC/AmpliconSuite-Cross-Version-Concordance/actions/runs/44041256493",
+    "environment_test_run": "https://github.com/YenningC/AmpliconSuite-Cross-Version-Concordance-Environments/actions/runs/44041555708",
+    "environment_publish_run": "https://github.com/YenningC/AmpliconSuite-Cross-Version-Concordance-Environments/actions/runs/44042036496",
     "environment_image_digest": "sha256:2273905bd8417cfd2d63af8f25e29c36383b70d2298954ebd834e7ca91959710",
     "platform": "linux/amd64",
     "scope": "Synthetic regression and component checks"
   },
   "previous_release_0_2_0": {
-    "program": "AmpliconSuite Benchmarks",
+    "program": "Historical 0.2.0 release",
     "program_version": "0.2.0",
     "date": "2026-11-17",
     "reference_version": "suite-1.6.2",
@@ -186,7 +186,7 @@
     },
     "official_comparators": {
       "status": "retained independent adapters; prior synthetic validation",
-      "automatic_asbench_integration": false,
+      "automatic_asconcordance_integration": false,
       "score_is_compatibility_threshold": false
     },
     "release_scope": "Program, tests, documentation and synthetic examples only. No patient inputs/results, license or runtime environments.",

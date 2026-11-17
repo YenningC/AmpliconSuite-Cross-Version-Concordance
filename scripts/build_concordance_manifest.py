@@ -5,7 +5,7 @@ import copy
 import json
 from pathlib import Path
 from ascompare.versions import load_lock
-from ascompare.benchmark_cnv import load_builtin_map
+from ascompare.concordance_cnv import load_builtin_map
 
 
 def build(manifest, prepared, templates, cnv_runtimes, lock):

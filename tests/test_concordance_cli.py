@@ -6,12 +6,12 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from ascompare.benchmark import main
+from ascompare.concordance import main
 from ascompare.versions import load_lock
-from scripts.build_benchmark_manifest import build
+from scripts.build_concordance_manifest import build
 
 
-class BenchmarkCliTests(unittest.TestCase):
+class ConcordanceCliTests(unittest.TestCase):
     def fixture(self):
         lock = load_lock()
         prepared = dict(reference_version=lock['reference_version'], sources=[
@@ -52,7 +52,7 @@ class BenchmarkCliTests(unittest.TestCase):
     def test_report_refuses_modified_saved_results(self):
         with tempfile.TemporaryDirectory() as temporary:
             out = Path(temporary)/'demo'
-            with patch('ascompare.benchmark_report._plots'):
+            with patch('ascompare.concordance_report._plots'):
                 self.assertEqual(main(['demo','--out',str(out)]),0)
                 self.assertEqual(main(['report','--out',str(out)]),0)
                 path=out/'downstream_records.json'

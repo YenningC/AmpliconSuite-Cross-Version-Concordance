@@ -90,14 +90,14 @@ def write_demo_manifest(directory):
 
 
 def demo(out):
-    """Run the same public loader/orchestrator used by `asbench run`."""
-    from .benchmark import load_manifest,run_benchmark
+    """Run the same public loader/orchestrator used by `asconcordance run`."""
+    from .concordance import load_manifest,run_concordance
     out=Path(out).absolute()
     if out.exists():raise ValueError('Demo output must be new; use a different output path')
     inputs=out.parent/(out.name+'_synthetic_inputs')
     manifest=write_demo_manifest(inputs)
     config,lock,entries=load_manifest(manifest)
-    result=run_benchmark(config,lock,entries,out)
+    result=run_concordance(config,lock,entries,out)
     atomic_json(out/'demo_provenance.json',{'synthetic':True,'manifest':str(manifest.resolve()),
         'input_directory':str(inputs.resolve()),'reference_version':REFERENCE_VERSION,
         'patient_data_used':False,'bam_used':False,'AA_executed':False,'AC_executed':False})

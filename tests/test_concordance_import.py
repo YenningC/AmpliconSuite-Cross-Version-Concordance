@@ -8,14 +8,14 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from ascompare.benchmark_import import inspect_import_format, import_result, reclassify_result, reclassify_cached, _verify_ac_runtime, _probe_json
+from ascompare.concordance_import import inspect_import_format, import_result, reclassify_result, reclassify_cached, _verify_ac_runtime, _probe_json
 from ascompare.common import atomic_json, digest
 from ascompare.parsing import LABELS
 from ascompare.versions import _digest
 from test_parsing import add_synthetic_amplicon, write_fixture_run
 
 
-class BenchmarkImportTests(unittest.TestCase):
+class ConcordanceImportTests(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory();self.root=Path(self.temp.name).resolve()
         self.source=write_fixture_run(self.root/'source')
@@ -45,7 +45,7 @@ print('SYNTHETIC AC completed')
 
     def reclassify(self,source=None):
         source=source or self.imported()
-        with patch('ascompare.benchmark_import._verify_ac_runtime',return_value=self.verified):
+        with patch('ascompare.concordance_import._verify_ac_runtime',return_value=self.verified):
             return reclassify_result(source,self.runtime,self.entry,self.config,self.root/'reclassified')
 
     def test_complete_import_copies_only_selected_small_files_and_marks_declarations(self):
@@ -55,7 +55,7 @@ print('SYNTHETIC AC completed')
         def guarded_digest(path):
             if Path(path).suffix in ('.bam','.cram'):raise AssertionError('BAM opened')
             return original_digest(path)
-        with patch('ascompare.benchmark_import.digest',side_effect=guarded_digest):record=self.imported()
+        with patch('ascompare.concordance_import.digest',side_effect=guarded_digest):record=self.imported()
         self.assertEqual(record['status'],'ok');self.assertEqual(record['analysis_kind'],'aa_ac')
         self.assertEqual(record['provenance_kind'],'imported_declared');self.assertTrue(record['comparison_eligible'])
         self.assertFalse(record['original_execution_verified']);self.assertEqual(digest(bam),before)
@@ -160,7 +160,7 @@ print('SYNTHETIC AC completed')
         record=self.imported();self.assertEqual(record['status'],'invalid');self.assertIn('Linked',record['reason'])
 
     def test_size_limit_and_output_overlap_are_refused(self):
-        with patch('ascompare.benchmark_import.MAX_FILE_BYTES',1):record=self.imported()
+        with patch('ascompare.concordance_import.MAX_FILE_BYTES',1):record=self.imported()
         self.assertEqual(record['status'],'invalid');self.assertIn('limit',record['reason'])
         with self.assertRaises(ValueError):self.imported(name='source/nested_output')
 
@@ -176,11 +176,11 @@ print('SYNTHETIC AC completed')
 
     def test_ac_only_source_hash_change_prevents_launch(self):
         source=self.imported();path=next((self.root/'import/aa').glob('*_graph.txt'));path.write_text('changed')
-        with patch('ascompare.benchmark_import.execute') as execute:
+        with patch('ascompare.concordance_import.execute') as execute:
             record=self.reclassify(source);execute.assert_not_called()
         self.assertEqual(record['status'],'unsupported');self.assertIn('checksum',record['reason'])
 
-    def test_nested_benchmark_ac_parameters_are_used_and_recorded(self):
+    def test_nested_concordance_ac_parameters_are_used_and_recorded(self):
         self.config['ac_parameters']={'min_size':120000,'min_flow':3.5}
         record=self.reclassify();self.assertEqual(record['status'],'ok')
         execution=json.loads((self.root/'reclassified/execution.json').read_text())
@@ -195,7 +195,7 @@ print('SYNTHETIC AC completed')
 
     def test_unverified_ac_is_unsupported_and_not_executed(self):
         source=self.imported()
-        with patch('ascompare.benchmark_import._verify_ac_runtime',side_effect=ValueError('AC source mismatch')):
+        with patch('ascompare.concordance_import._verify_ac_runtime',side_effect=ValueError('AC source mismatch')):
             record=reclassify_result(source,self.runtime,self.entry,self.config,self.root/'reclassified')
         self.assertEqual(record['status'],'unsupported');self.assertFalse(record['ac_executed']);self.assertFalse(record['ac_runtime_verified'])
 
@@ -205,7 +205,7 @@ print('SYNTHETIC AC completed')
 
     def test_cancellation_records_interruption_and_propagates(self):
         source=self.imported()
-        with patch('ascompare.benchmark_import._verify_ac_runtime',return_value=self.verified),patch('ascompare.benchmark_import.execute',side_effect=KeyboardInterrupt):
+        with patch('ascompare.concordance_import._verify_ac_runtime',return_value=self.verified),patch('ascompare.concordance_import.execute',side_effect=KeyboardInterrupt):
             with self.assertRaises(KeyboardInterrupt):
                 reclassify_result(source,self.runtime,self.entry,self.config,self.root/'reclassified')
         record=json.loads((self.root/'reclassified/result.json').read_text())
@@ -219,7 +219,7 @@ print('SYNTHETIC AC completed')
     def test_ac_verifier_rejects_source_and_version_mismatch_without_aa_keys(self):
         with self.assertRaisesRegex(ValueError,'source manifest'):_verify_ac_runtime(self.runtime,self.entry,os.environ.copy())
         fake={'returncode':0,'stdout':'AC 9.9.9','stderr':''}
-        with patch('ascompare.benchmark_import._check_source',return_value={}),patch('ascompare.benchmark_import._run',return_value=fake):
+        with patch('ascompare.concordance_import._check_source',return_value={}),patch('ascompare.concordance_import._run',return_value=fake):
             with self.assertRaisesRegex(ValueError,'version differs'):_verify_ac_runtime(self.runtime,self.entry,os.environ.copy())
 
 

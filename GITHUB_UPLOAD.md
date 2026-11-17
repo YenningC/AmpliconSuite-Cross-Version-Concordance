@@ -1,6 +1,6 @@
 # 上传到 GitHub
 
-项目名称为 **AmpliconSuite Cross-Version Concordance**。现有仓库地址使用 `AmpliconSuite-Benchmarks`。简介可填写：
+项目名称为 **AmpliconSuite Cross-Version Concordance**。GitHub 仓库名为 `AmpliconSuite-Cross-Version-Concordance`。简介可填写：
 
 > Bounded, reproducible cross-version comparisons of AmpliconSuite outputs, with per-sample similarity ladders and cautious compatibility assessment.
 
@@ -23,7 +23,7 @@ git init -b main
 git add .
 git diff --cached --stat
 git commit -m "Add AmpliconSuite Cross-Version Concordance"
-git remote add origin https://github.com/YOUR_ACCOUNT/AmpliconSuite-Benchmarks.git
+git remote add origin https://github.com/YOUR_ACCOUNT/AmpliconSuite-Cross-Version-Concordance.git
 git push -u origin main
 ```
 

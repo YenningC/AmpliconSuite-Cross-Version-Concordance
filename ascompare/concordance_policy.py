@@ -1,4 +1,4 @@
-"""Bounded, indexed BAM access for the benchmark's locked Python callers.
+"""Bounded, indexed BAM access for the workflow's locked Python callers.
 
 This is an execution contract for audited scientific tools, not a security
 sandbox for arbitrary hostile programs. No BAM copying, indexing, hashing in

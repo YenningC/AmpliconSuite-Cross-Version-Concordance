@@ -55,7 +55,7 @@ CNVkit 原生 coverage、reference、fix、CBS segment 计算保留；WGS 风格
 }
 ```
 
-未来来源运行可在开始时调用 `ascompare.benchmark_cnv._sampled_identity(path)` 保存这种有限输入指纹，并在实际完成后记录两个小型结果的 SHA-256。历史记录采用其他身份格式时，需要根据**已留存的原记录**转换或单独核验，当前程序不会在缺少证据时自动认定其相同。抽样指纹本身也不是完整 BAM 校验值。
+未来来源运行可在开始时调用 `ascompare.concordance_cnv._sampled_identity(path)` 保存这种有限输入指纹，并在实际完成后记录两个小型结果的 SHA-256。历史记录采用其他身份格式时，需要根据**已留存的原记录**转换或单独核验，当前程序不会在缺少证据时自动认定其相同。抽样指纹本身也不是完整 BAM 校验值。
 
 校准执行的检查为：来源 CNVkit 版本与本次实际版本相同；build 和参考策略相同；原始肿瘤和正常 BAM 抽样身份与当前输入一致（`flat` 只检查肿瘤）；CNS 和候选 BED 的完整 SHA-256 与原运行记录相同；原候选及 CNS 对请求种子的覆盖均达到 `min_seed_overlap`。满足来源条件后，本次局部流程仍保留候选记为 `calibration_status=passed`；不能再保留记为 `failed`；来源缺失或不匹配记为 `unverified`。
 
@@ -67,13 +67,13 @@ CNVkit 原生 coverage、reference、fix、CBS segment 计算保留；WGS 风格
 
 ## 合成集成测试
 
-`tests/test_benchmark_cnv.py` 包含默认运行的独立测试，以及可选真实 CNVkit 测试。后者自行生成微型参考、两个微型 BAM 与索引，只读取这些人工数据：
+`tests/test_concordance_cnv.py` 包含默认运行的独立测试，以及可选真实 CNVkit 测试。后者自行生成微型参考、两个微型 BAM 与索引，只读取这些人工数据：
 
 ```sh
 CNVKIT_SMOKE_PYTHON=/absolute/cnvkit-env/bin/python \
 CNVKIT_SMOKE_VERSION=0.9.13 \
 CNVKIT_SMOKE_REFERENCE_MODE=matched_normal \
-python -m unittest discover -s tests -p test_benchmark_cnv.py -k test_actual_cnvkit -v
+python -m unittest discover -s tests -p test_concordance_cnv.py -k test_actual_cnvkit -v
 ```
 
 从仓库根目录运行，需先安装比较程序及其测试依赖，并准备已安装 CNVkit、R 和 DNAcopy 的组件环境。测试验证有限 BED 的肿瘤/正常 coverage、reference、fix、CBS 和 I/O 预算审计；它不等于真实样本性能或完整 AA 种子筛选已验证。

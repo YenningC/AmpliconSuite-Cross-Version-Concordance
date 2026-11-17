@@ -1,4 +1,4 @@
-"""Local small-artifact import and AC-only reclassification for Benchmarks.
+"""Local small-artifact import and AC-only reclassification for cross-version concordance.
 
 No BAM/CRAM is opened. Imported component identities are declarations, never
 runtime verification. AC-only results inherit AA graphs and cannot measure AA.
@@ -30,8 +30,8 @@ def _new_output(destination, sources):
     for source in sources:
         p=Path(source).resolve()
         if p==out.resolve() or p in out.resolve().parents or out.resolve() in p.parents:
-            raise ValueError('Benchmark output must be separate from original inputs/resources')
-    if out.exists():raise ValueError('Benchmark import/reclassification requires a new output directory')
+            raise ValueError('Concordance output must be separate from original inputs/resources')
+    if out.exists():raise ValueError('Concordance import/reclassification requires a new output directory')
     out.mkdir(parents=True)
     return out
 

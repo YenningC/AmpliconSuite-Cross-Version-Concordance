@@ -14,7 +14,7 @@ from .inputs import safe_id
 from .parsing import merge_intervals
 from .runner import empty_record, execute, local_reference, check_ac_runtime
 from .versions import load_lock, verify_runtime
-from .benchmark_policy import guarded_command
+from .concordance_policy import guarded_command
 
 PROGRAM_VERSION = __version__
 FIXED_REFERENCE = 'suite-1.6.2'
@@ -192,7 +192,7 @@ def load_manifest(path):
     if len(runtime_ids) != len(set(runtime_ids)):
         raise ValueError('Duplicate runtime IDs')
     if config.get('threads', 1) != 1:
-        raise ValueError('The bounded benchmark currently executes serially')
+        raise ValueError('The bounded concordance currently executes serially')
     for key, allowed in (('aa_parameters', {'downsample'}), ('ac_parameters', {'min_size', 'min_flow'})):
         if not isinstance(config.get(key, {}), dict) or set(config.get(key, {})) - allowed:
             raise ValueError('Unsupported parameters in ' + key + '; no parameters are silently ignored')
@@ -204,7 +204,7 @@ def load_manifest(path):
     ds = float(config.get('aa_parameters', {}).get('downsample', -1))
     if not math.isfinite(ds) or ds != -1 and ds <= 0:
         raise ValueError('AA downsample must be -1 or positive finite coverage')
-    from .benchmark_report import _configuration
+    from .concordance_report import _configuration
     _configuration(config)  # Reject invalid analysis plans before launching component jobs.
     return config, lock, entries
 
@@ -343,7 +343,7 @@ def run_bounded_downstream(sample, seeds, runtime, entry, verified, config, out)
         'mtime_ns': p.stat().st_mtime_ns if p.is_file() else None} for p in license_paths]
     signature = _signature(dict(seeds=seeds, inputs=sample['_input_identities'], runtime=runtime,
         verified=identity, reference=config['reference'], reference_identity=config.get('_reference_identity'), policy=config.get('io_policy', {}),
-        runner_sha256=digest(__file__), policy_executor_sha256=digest(Path(__file__).with_name('benchmark_policy.py')),
+        runner_sha256=digest(__file__), policy_executor_sha256=digest(Path(__file__).with_name('concordance_policy.py')),
         aa_parameters=config.get('aa_parameters', {}), ac_parameters=config.get('ac_parameters', {})))
     cached = _cached_result(out, signature)
     if cached:
@@ -463,10 +463,10 @@ def _bridge(original, replay, seeds):
     return rows
 
 
-def run_benchmark(config, lock, entries, out, check_only=False):
-    from .benchmark_import import import_result, reclassify_result
-    from .benchmark_cnv import run_local_upstream
-    from .benchmark_report import write_benchmark_reports
+def run_concordance(config, lock, entries, out, check_only=False):
+    from .concordance_import import import_result, reclassify_result
+    from .concordance_cnv import run_local_upstream
+    from .concordance_report import write_concordance_reports
     out = Path(out).resolve()
     # Reject overlap before any write, including beneath an original result tree.
     originals = []
@@ -495,9 +495,9 @@ def run_benchmark(config, lock, entries, out, check_only=False):
 
 
 def _run_locked(config, lock, entries, out, check_only):
-    from .benchmark_import import import_result, reclassify_cached, _artifacts, MAX_FILE_BYTES, MAX_TOTAL_BYTES
-    from .benchmark_cnv import run_local_upstream
-    from .benchmark_report import write_benchmark_reports
+    from .concordance_import import import_result, reclassify_cached, _artifacts, MAX_FILE_BYTES, MAX_TOTAL_BYTES
+    from .concordance_cnv import run_local_upstream
+    from .concordance_report import write_concordance_reports
     config = copy.deepcopy(config)
     if config.get('runtimes') and re.search(r'\s', str(out)):
         raise ValueError('Native AC input tables do not support whitespace in working/output paths; choose a separate path without whitespace')
@@ -546,7 +546,7 @@ def _run_locked(config, lock, entries, out, check_only):
             specs = [(source, sample['source_result'])] + [(r['version'], r) for r in sample['comparison_results']]
             for vid, spec in specs:
                 if check_only:
-                    from .benchmark_import import inspect_import_format
+                    from .concordance_import import inspect_import_format
                     entry = entries[vid]
                     categories = entry.get('supported_labels', entry.get('supported_classes', []))
                     result = inspect_import_format(spec, categories)
@@ -724,7 +724,7 @@ def _run_locked(config, lock, entries, out, check_only):
     table(out / 'run_metadata.tsv', [dict(program_version=PROGRAM_VERSION, created_utc=now(),
         reference_version=FIXED_REFERENCE, mode=config['mode'], manifest_hash=run_identity,
         whole_genome_bam_operations='prohibited', **s) for s in source_files])
-    summary = write_benchmark_reports(out, downstream, upstream, config)
+    summary = write_concordance_reports(out, downstream, upstream, config)
     atomic_json(out / 'report_inputs.sha256.json', {name: digest(out / name) for name in
         ('downstream_records.json', 'upstream_records.json', 'config.resolved.json')})
     return summary
@@ -752,7 +752,7 @@ def main(argv=None):
             print('Saved ' + str(prepare_panel(args.out, args.versions, args.lock)))
             return 0
         if args.command == 'versions':
-            from .benchmark_cnv import load_builtin_map
+            from .concordance_cnv import load_builtin_map
             lock = load_lock()
             recipe_map = load_builtin_map()['versions']
             print(json.dumps(dict(reference_version=lock['reference_version'], versions=[
@@ -762,23 +762,23 @@ def main(argv=None):
                 for e in lock['versions'] if e.get('suite')]), indent=2))
             return 0
         if args.command == 'demo':
-            from .benchmark_demo import demo
+            from .concordance_demo import demo
             demo(args.out)
             return 0
         if args.command == 'report':
-            from .benchmark_report import write_benchmark_reports
+            from .concordance_report import write_concordance_reports
             out = Path(args.out).resolve()
             run_version = json.loads((out / 'provenance.json').read_text()).get('program_version')
-            if run_version != PROGRAM_VERSION:
+            if run_version not in {PROGRAM_VERSION, '0.3.0'}:
                 raise ValueError('Use the original program version to redraw this report, or run the manifest into a new output directory')
             expected = json.loads((out / 'report_inputs.sha256.json').read_text())
             if not all((out / name).is_file() and digest(out / name) == value for name, value in expected.items()):
                 raise ValueError('Report inputs changed after execution; rerun the same manifest to revalidate, or start a new analysis')
-            write_benchmark_reports(out, json.loads((out / 'downstream_records.json').read_text()),
+            write_concordance_reports(out, json.loads((out / 'downstream_records.json').read_text()),
                 json.loads((out / 'upstream_records.json').read_text()), json.loads((out / 'config.resolved.json').read_text()))
         else:
             config, lock, entries = load_manifest(args.manifest)
-            result = run_benchmark(config, lock, entries, args.out, args.command == 'check')
+            result = run_concordance(config, lock, entries, args.out, args.command == 'check')
             if args.command == 'check' and any(r['status'] != 'ok' for r in
                     result['input_check'] + result['import_format_check']):
                 return 2

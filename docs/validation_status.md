@@ -1,8 +1,10 @@
-# Validation status — 0.3.0
+# Validation status
 
-The fixed reference remains Suite 1.6.2. The 0.3.0 update was developed and tested with synthetic inputs. The local regression suite checks patient clustering, exploratory cohorts, signed paired changes and their direction, an independent source calibration, the reachable upstream exceedance branch, partial amplicons and format-only preflight. Real CNVkit 0.9.10 and 0.9.13 were separately exercised on temporary synthetic BAMs. Suite 1.5.3 source identities were checked against the official image and source locks. Its AA/AC launch and a small local Mosek solver probe passed.
+## 0.3.0 baseline evidence
 
-GitHub Actions passed the 0.3.0 synthetic regression on Python 3.10 and 3.12, with 231 tests passed and one optional integration case skipped on each version. The Linux amd64 build separately tested both pinned CNVkit versions on synthetic inputs, reference AA launch, and AC launches across the eleven-version panel. The public 0.3.0 image uses the pinned source commit `61a720bcf4de25ac5103961cbd80dd4bef315b34`. Real-patient bounded AA and cohort-level compatibility remain unverified. [Python regression](https://github.com/YenningC/AmpliconSuite-Benchmarks/actions/runs/44041256493) · [Linux environment test](https://github.com/YenningC/AmpliconSuite-Benchmarks-Environments/actions/runs/44041555708) · [Image publication](https://github.com/YenningC/AmpliconSuite-Benchmarks-Environments/actions/runs/44042036496) · [Public environment package](https://github.com/YenningC/AmpliconSuite-Benchmarks-Environments/pkgs/container/ampliconsuite-benchmarks-environments)
+The fixed reference is Suite 1.6.2. The 0.3.0 update was developed and tested with synthetic inputs. The local regression suite checks patient clustering, exploratory cohorts, signed paired changes and their direction, an independent source calibration, the reachable upstream exceedance branch, partial amplicons and format-only preflight. Real CNVkit 0.9.10 and 0.9.13 were separately exercised on temporary synthetic BAMs. Suite 1.5.3 source identities were checked against the official image and source locks. Its AA/AC launch and a small local Mosek solver probe passed.
+
+GitHub Actions passed the 0.3.0 synthetic regression on Python 3.10 and 3.12, with 231 tests passed and one optional integration case skipped on each version. The Linux amd64 build separately tested both pinned CNVkit versions on synthetic inputs, reference AA launch, and AC launches across the eleven-version panel. The public 0.3.0 image uses the pinned source commit `61a720bcf4de25ac5103961cbd80dd4bef315b34`. Real-patient bounded AA and cohort-level compatibility remain unverified. [Python regression](https://github.com/YenningC/AmpliconSuite-Cross-Version-Concordance/actions/runs/44041256493) · [Linux environment test](https://github.com/YenningC/AmpliconSuite-Cross-Version-Concordance-Environments/actions/runs/44041555708) · [Image publication](https://github.com/YenningC/AmpliconSuite-Cross-Version-Concordance-Environments/actions/runs/44042036496)
 
 Machine-readable results are in [validation_summary.json](../validation_summary.json).
 
@@ -28,7 +30,7 @@ The real CNVkit tests used a finite synthetic BED of approximately32kb. Matched-
 
 The GitHub distribution preserves the scientific Python implementation. Public-facing README files, packaging utilities, repository exclusions and CI configuration were added; internal operational history and real-study records were excluded. Source-lock descriptive notes were generalized without changing component versions, commits, archive hashes or source-manifest hashes. A timeout regression test has a more generous child-process startup allowance for shared CI hosts; product timeouts are unchanged.
 
-The default test suite uses temporary synthetic inputs and does not fetch upstream code or access patient files. The current Benchmarks workflow is configured for Linux/Python 3.10 and 3.12. Native Windows support has not been verified.
+The default test suite uses temporary synthetic inputs and does not fetch upstream code or access patient files. The current regression workflow is configured for Linux/Python 3.10 and 3.12. Native Windows support has not been verified.
 
 ## Still required for research use
 

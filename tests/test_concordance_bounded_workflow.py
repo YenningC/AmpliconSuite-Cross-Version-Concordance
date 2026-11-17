@@ -16,8 +16,8 @@ from unittest.mock import patch
 
 import pysam
 
-from ascompare.benchmark import (_bridge,fast_fingerprint,load_manifest,project_record,
-                                 run_benchmark,run_bounded_downstream)
+from ascompare.concordance import (_bridge,fast_fingerprint,load_manifest,project_record,
+                                 run_concordance,run_bounded_downstream)
 from ascompare.common import atomic_json,digest
 from ascompare.full_suite import run_full_suite
 from ascompare.parsing import parse_run
@@ -26,7 +26,7 @@ from ascompare.versions import load_lock
 from test_parsing import write_fixture_run
 
 
-class BoundedBenchmarkWorkflowTests(unittest.TestCase):
+class BoundedConcordanceWorkflowTests(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory();self.root=Path(self.temp.name).resolve()
         self.bam=self.root/'SYNTHETIC_tumor.bam'
@@ -207,9 +207,9 @@ print('BFBArchitect SYNTHETIC integration enabled')
             return [dict(sample_id=sample['sample_id'],seed_id=s['seed_id'],version=runtime['id'],source_version=sample['source_version'],
                 status='retained',retention_fraction=1.,comparison_eligible=True,calibration_status='passed',native_recipe_match=True,
                 matching_rule='SYNTHETIC_TEST_exact_interval',cnvkit_version='SYNTHETIC_CNV_STUB',synthetic=True) for s in sample['seeds']]
-        with patch('ascompare.benchmark.verify_runtime',side_effect=self.make_verified), \
-             patch('ascompare.benchmark_cnv.run_local_upstream',side_effect=cnv),patch('ascompare.benchmark_report._plots'):
-            result=run_benchmark(config,lock,entries,self.root/name)
+        with patch('ascompare.concordance.verify_runtime',side_effect=self.make_verified), \
+             patch('ascompare.concordance_cnv.run_local_upstream',side_effect=cnv),patch('ascompare.concordance_report._plots'):
+            result=run_concordance(config,lock,entries,self.root/name)
         self.assertEqual(before,{str(p):digest(p) for p in inputs})
         return result,self.root/name
 

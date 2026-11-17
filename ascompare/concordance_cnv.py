@@ -1,4 +1,4 @@
-"""Bounded local CNVkit and native AA seed-filter benchmark.
+"""Bounded local CNVkit and native AA seed-filter comparison.
 
 The endpoint is retention of an existing candidate, never confirmed amplification.
 Local bins and local centering change the context of CNV estimation; therefore an
@@ -13,7 +13,7 @@ from pathlib import Path
 import re
 import shutil
 
-from .benchmark_policy import guarded_command
+from .concordance_policy import guarded_command
 from .common import atomic_json, digest, now
 from .runner import execute, local_reference
 
@@ -279,7 +279,7 @@ def _cached_cnv(sample, runtime, config, windows, identity, out, policy, env):
                   'launcher_sha256': hashlib.sha256(_CNV_LAUNCHER.encode()).hexdigest()}
     signature = {'sample_id': sample['sample_id'], 'inputs': inputs,
                  'io_contract': {'policy': json.loads(Path(policy).read_text()),
-                                 'guard_sha256': digest(Path(__file__).with_name('benchmark_policy.py'))},
+                                 'guard_sha256': digest(Path(__file__).with_name('concordance_policy.py'))},
                  'cnvkit': identity, 'parameters': parameters}
     key = hashlib.sha256(json.dumps(signature, sort_keys=True).encode()).hexdigest()
     cache_root = Path(config.get('_cnv_cache_dir', Path(out) / 'cnv_cache')) / key
@@ -485,7 +485,7 @@ def run_local_upstream(sample, runtime, entry, config, out):
                 calibration_status='unverified',
                 calibration_reason='No matched same-CNVkit, same-input whole-genome calibration evidence has been evaluated; local bins, centering and segmentation context differ',
                 matching_rule='union_overlap_bp / original_seed_bp >= configured min_seed_overlap',
-                threshold_origin='user-configurable benchmark threshold; not an official AA/CNVkit threshold',
+                threshold_origin='user-configurable concordance threshold; not an official AA/CNVkit threshold',
                 native_recipe_cnvkit=mapped.get('cnvkit_version'),
                 native_recipe_match=runtime.get('cnvkit_version') == mapped.get('cnvkit_version'),
                 comparison_design='native_recipe_cnvkit' if runtime.get('cnvkit_version') == mapped.get('cnvkit_version')

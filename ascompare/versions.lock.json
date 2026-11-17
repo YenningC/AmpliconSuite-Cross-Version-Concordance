@@ -2,7 +2,7 @@
   "schema_version": 1,
   "frozen_on": "2026-11-17",
   "reference_version": "suite-1.6.2",
-  "selection_policy": "Source-pinned official Suite releases and separately identified historical diagnostic combinations. AmpliconSuite Benchmarks uses only existing-result comparisons, fixed-source-AA AC reclassification, or bounded local candidate CNVkit plus selected-seed AA+AC. Whole-genome BAM workflows are disabled. CNVkit recipe mapping is in builtin_cnvkit_map.json and actual installed versions are independently verified; source tags do not prove runtime identity.",
+  "selection_policy": "Source-pinned official Suite releases and separately identified historical diagnostic combinations. AmpliconSuite Cross-Version Concordance uses only existing-result comparisons, fixed-source-AA AC reclassification, or bounded local candidate CNVkit plus selected-seed AA+AC. Whole-genome BAM workflows are disabled. CNVkit recipe mapping is in builtin_cnvkit_map.json and actual installed versions are independently verified; source tags do not prove runtime identity.",
   "versions": [
     {
       "id": "aa-1.3.r2-ac-1.2.1",
@@ -151,7 +151,7 @@
         "archive_sha256": "09ab6f39f2173a5f60b910a16136b828a613fdfef5944f83a017199014a8c70b",
         "manifest_sha256": "1c80eda0eccc369f0ce73aac8a130da8f01405a223f0525a4acba0e3f492960e"
       },
-      "selection_reason": "Documented AA/AC pairing selected for this benchmark. The Suite release alone does not pin these components; actual runtime identities must be verified.",
+      "selection_reason": "Documented AA/AC pairing selected for this comparison. The Suite release alone does not pin these components; actual runtime identities must be verified.",
       "supported_classes": [
         "ecDNA",
         "BFB",

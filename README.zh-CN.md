@@ -4,7 +4,7 @@
 
 **以有限计算比较不同版本的扩增结果，输出逐样本天梯图和有明确证据边界的兼容性报告。**
 
-版本 **0.3.0**。固定参考为 **Suite 1.6.2 / AA 1.6.r2 / AC 2.0.1**，不会随上游更新自动改变。本项目是独立开发的本地科研工具，不属于官方AmpliconSuite组件。
+版本 **0.3.1**。固定参考为 **Suite 1.6.2 / AA 1.6.r2 / AC 2.0.1**，不会随上游更新自动改变。本项目是独立开发的本地科研工具，不属于官方AmpliconSuite组件。
 
 > 相似度只描述已观察到的软件输出，不是生物学真实性概率，也不证明完整流程可互换。允许差异未预设、样本不足或证据不完整时，结论保留为“证据不足”。
 
@@ -21,7 +21,7 @@
 
 ## 快速开始
 
-Python 包名为 `ampliconsuite-benchmarks`，运行命令为 `asbench`。
+Python 包名为 `ampliconsuite-cross-version-concordance`。请在新的虚拟环境安装，然后使用 `asconcordance` 命令。
 
 在解压后的仓库根目录运行；当前面向Linux/macOS：
 
@@ -29,32 +29,32 @@ Python 包名为 `ampliconsuite-benchmarks`，运行命令为 `asbench`。
 python3 -m venv .venv
 . .venv/bin/activate
 python -m pip install .
-asbench --help
-asbench versions
-asbench demo --out demo_output
+asconcordance --help
+asconcordance versions
+asconcordance demo --out demo_output
 ```
 
 查看 `demo_output/report.md`。Demo自行生成明确标记的人工结果，走真实导入、统计和绘图入口；不需要患者数据、BAM或AA/AC环境，**不执行真实AA/AC，不构成患者结论**。重复生成demo须使用新输出目录。
 
-需要Python≥3.10、NumPy、SciPy、Matplotlib、pysam。安装本包只安装比较程序依赖，不包含AA、AC、CNVkit、参考资源或商业求解器许可。也可通过 `python -m ascompare.benchmark` 使用程序。
+需要Python≥3.10、NumPy、SciPy、Matplotlib、pysam。安装本包只安装比较程序依赖，不包含AA、AC、CNVkit、参考资源或商业求解器许可。也可通过 `python -m ascompare.concordance` 使用程序。
 
 ## 配置真实输入
 
-- [多个版本既有结果](examples/benchmarks.results_only.json)：无需BAM和算法环境。
-- [仅一套结果，重做AC](examples/benchmarks.ac_only.json)：需配置对应AC及参考资源。
-- [已有结果＋BAM](examples/benchmarks.with_bam.json)：需配置精确AA/AC/CNVkit环境。
+- [多个版本既有结果](examples/concordance.results_only.json)：无需BAM和算法环境。
+- [仅一套结果，重做AC](examples/concordance.ac_only.json)：需配置对应AC及参考资源。
+- [已有结果＋BAM](examples/concordance.with_bam.json)：需配置精确AA/AC/CNVkit环境。
 
 ```sh
-cp examples/benchmarks.results_only.json benchmarks.local.json
-# 编辑benchmarks.local.json，填写实际本地路径、来源版本及分析参数。
-asbench check --manifest benchmarks.local.json --out runs/comparison
-asbench run --manifest benchmarks.local.json --out runs/comparison
-asbench report --out runs/comparison
+cp examples/concordance.results_only.json concordance.local.json
+# 编辑concordance.local.json，填写实际本地路径、来源版本及分析参数。
+asconcordance check --manifest concordance.local.json --out runs/comparison
+asconcordance run --manifest concordance.local.json --out runs/comparison
+asconcordance report --out runs/comparison
 ```
 
 相对路径以清单文件所在目录为准。原文件只读，输出必须与输入/参考目录分开。可显式指定 `aa_dir`、`ac_dir`，也支持规范化 `run_dir` 或可识别的Suite `result_dir`；目录有歧义时不猜测。尽量保留graph、cycles、summary、分类profile与feature BED，只有图片或分类标签不足以完成比较。
 
-`check` 检查清单、坐标、BAM 头、现成索引和小型结果文件格式。`import_format_check.tsv` 显示每份导入的表头、文件计数以及匹配问题。`run`另核验真实组件版本和源码，缺环境/失败不替换为最新版。`report` 重绘同程序版本的完整性已核验结果。0.2.0 的分析请用原版重绘，升级后的计算使用新输出目录。报告成功生成不等于所有科学计算成功，须同时查看运行覆盖率和异常记录。
+`check` 检查清单、坐标、BAM 头、现成索引和小型结果文件格式。`import_format_check.tsv` 显示每份导入的表头、文件计数以及匹配问题。`run`另核验真实组件版本和源码，缺环境/失败不替换为最新版。`report` 重绘同程序版本的完整性已核验结果。0.3.1 可以重绘通过完整性校验的 0.3.0 报告。升级后的计算请使用新输出目录。报告成功生成不等于所有科学计算成功，须同时查看运行覆盖率和异常记录。
 
 [服务器步骤](docs/server_quickstart.md)说明多版本配置；[依赖说明](docs/environment_setup.md)说明历史环境；[局部CNV校准](docs/local_cnv_calibration.md)说明原始来源证据要求。
 
@@ -109,7 +109,7 @@ asbench report --out runs/comparison
 | 输出 | 内容 |
 |---|---|
 | `report.md`、`summary.json` | 配对差异、分母、参考版本与结论范围 |
-| `import_format_check.tsv` | `asbench check` 的小文件格式核查 |
+| `import_format_check.tsv` | `asconcordance check` 的小文件格式核查 |
 | `similarity_ladder.*`、`sample_ladders/` | 汇总及逐样本天梯图，PNG/PDF/SVG |
 | `sample_plot_index.tsv`、`sample_similarity.tsv` | 图索引、观察相似度和状态 |
 | `compatibility_table.*`、`compatibility_combined.tsv` | 三态兼容表 |
@@ -125,7 +125,7 @@ asbench report --out runs/comparison
 
 0.3.0 回归覆盖独立校准、患者聚类、探索性比较、配对差异首页和部分原生结果解析。真实 CNVkit 0.9.10 和 0.9.13 已用人工 BAM 验证局部流程。Suite 1.5.3 具备核验过的源码锁和本机组件启动证据。
 
-GitHub Actions 已通过 Python 3.10 和 3.12 的人工数据回归测试，以及 0.3.0 环境的 Linux amd64 测试。真实患者重建和队列兼容仍待验证。 [验证详情](docs/validation_status.md) · [环境和镜像安装说明](https://github.com/YenningC/AmpliconSuite-Benchmarks-Environments)
+GitHub Actions 已通过 Python 3.10 和 3.12 的人工数据回归测试，以及 0.3.0 环境的 Linux amd64 测试。真实患者重建和队列兼容仍待验证。 [验证详情](docs/validation_status.md) · [环境和镜像安装说明](https://github.com/YenningC/AmpliconSuite-Cross-Version-Concordance-Environments)
 
 ```sh
 python -m unittest discover -s tests -v
@@ -133,10 +133,10 @@ python -m unittest discover -s tests -v
 
 默认测试只创建临时人工输入，不下载上游程序或读取患者数据。真实CNVkit测试需显式配置外部环境。
 
-官方EC-comparator及AC的results_comparator独立适配器继续保留；新asbench不自动调用，也不把其分数当兼容阈值。[使用说明](docs/official_comparison_tools.md)。
+官方EC-comparator及AC的results_comparator独立适配器继续保留；新asconcordance不自动调用，也不把其分数当兼容阈值。[使用说明](docs/official_comparison_tools.md)。
 
 ## 仓库与许可证
 
-程序在 `ascompare/`，测试在 `tests/`，示例在 `examples/`，辅助脚本在 `scripts/`。部分旧模块留作回归测试；旧 `ascompare run/check` 全基因组工作流已禁用，请使用 `asbench`。
+程序在 `ascompare/`，测试在 `tests/`，示例在 `examples/`，辅助脚本在 `scripts/`。部分旧模块留作回归测试；旧 `ascompare run/check` 全基因组工作流已禁用，请使用 `asconcordance`。
 
 仓库只包含程序、文档和人工示例，没有患者数据、私有配置、参考基因组、算法环境或求解器许可证。使用项目原创代码须按已公开的声明取得事先书面许可。申请联系人见该声明。第三方组件遵循各自许可。 [授权声明](LICENSE_STATUS.md) · [GitHub 上传步骤](GITHUB_UPLOAD.md)

@@ -96,7 +96,7 @@ def check_ac_runtime(log, version):
 
 def run_jobs(config, samples, runtimes, out):
     if not config.get('synthetic'):
-        raise ValueError('Legacy unguarded AA execution is disabled; use the bounded benchmark workflow')
+        raise ValueError('Legacy unguarded AA execution is disabled; use the bounded concordance workflow')
     from .parsing import parse_run, aa_amplicon_count
     out = Path(out).resolve()
     out.mkdir(parents=True,exist_ok=True)

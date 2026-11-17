@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from ascompare import benchmark_cnv as cnv
+from ascompare import concordance_cnv as cnv
 
 
 class BoundedLocalCnvTests(unittest.TestCase):

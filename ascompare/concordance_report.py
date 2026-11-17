@@ -734,7 +734,7 @@ def _report_effects(downstream, upstream, mode, independence_unit):
     return header
 
 
-def write_benchmark_reports(out, downstream_records, upstream_records, config):
+def write_concordance_reports(out, downstream_records, upstream_records, config):
     """Write local conditional reports, preserving unknown and unavailable states.
 
     ``comparison_eligible`` must be True. ``samples[].upstream_seed_ids`` declares
@@ -783,7 +783,7 @@ def write_benchmark_reports(out, downstream_records, upstream_records, config):
                    independence_unit=unit, selected_independent_units=len(set(patient_ids.values())) if patient_ids is not None else len(samples),
                    primary_pairs=options.get('primary_pairs'), plot_error=plot_error,
                    sample_plot_index=sample_plots,
-                   scope="conditional known-candidate benchmark; never complete Suite or genome-wide compatibility",
+                   scope="conditional known-candidate comparison; never complete Suite or genome-wide compatibility",
                    report=str(out / "report.md"))
     _json(out / "summary.json", summary)
     lines = ["# AmpliconSuite Cross-Version Concordance", "", f"固定参考：**{ref}**；模式：`{config['mode']}`；输入样本：{len(samples)}。",

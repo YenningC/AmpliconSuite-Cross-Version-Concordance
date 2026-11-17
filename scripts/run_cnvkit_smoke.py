@@ -17,7 +17,7 @@ def main():
     parser.add_argument('--reference-mode', default='matched_normal', choices=['matched_normal', 'flat'])
     args = parser.parse_args()
     out, base, program = Path(args.out).absolute(), Path(args.base_python).absolute(), Path(args.program).absolute()
-    if not base.is_file() or not (program / 'tests/test_benchmark_cnv.py').is_file():
+    if not base.is_file() or not (program / 'tests/test_concordance_cnv.py').is_file():
         parser.error('Base interpreter or the program synthetic test is missing')
     out.mkdir(parents=True, exist_ok=True)
     python = args.cnvkit_python or (str(base) if args.version == '0.9.14'
@@ -35,7 +35,7 @@ def main():
                  CNVKIT_SMOKE_ARTIFACTS=str(out / (stem + '-artifacts')))
     env = dict(os.environ)
     env.update(extra)
-    command = [str(base), '-m', 'unittest', 'discover', '-s', 'tests', '-p', 'test_benchmark_cnv.py',
+    command = [str(base), '-m', 'unittest', 'discover', '-s', 'tests', '-p', 'test_concordance_cnv.py',
                '-k', 'test_actual_cnvkit', '-v']
     record = dict(command=command, environment=extra, label='SYNTHETIC_ONLY', program=str(program),
                   runtime_variant='isolated_exact_CNVkit_reusing_recorded_scientific_dependencies')

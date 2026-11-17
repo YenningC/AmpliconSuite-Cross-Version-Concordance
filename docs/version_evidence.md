@@ -1,6 +1,6 @@
 # Version identity and panel scope
 
-The reference is frozen at Suite **1.6.2 / AA 1.6.r2 / AC 2.0.1 / BFBArchitect 1.0.2**, selected on 2026-11-17. This is a reproducible benchmark reference, not a promise to follow future releases automatically.
+The reference is frozen at Suite **1.6.2 / AA 1.6.r2 / AC 2.0.1 / BFBArchitect 1.0.2**, selected on 2026-11-17. This is a reproducible comparison reference, not a promise to follow future releases automatically.
 
 The eleven Suite recipes and component versions are listed in the root README. The exact source repositories, tags, 40-character commits, archive SHA-256 values, source-manifest SHA-256 values and evidence URLs are recorded in `versions.lock.json`. Its packaged copy is `ascompare/versions.lock.json`.
 
@@ -8,9 +8,9 @@ The eleven Suite recipes and component versions are listed in the root README. T
 
 Source preparation verifies the selected public archives and source inventories. Execution additionally verifies real versions, import locations, interpreters and dependencies. A directory name, image tag or imported result declaration alone is not execution evidence. Missing historical runtimes remain missing; the program never substitutes the current AA/AC silently.
 
-Suite **1.3.4 / AA 1.4.r2 / AC 1.2.1** is an explicitly selected benchmark recipe supported by recorded component pairing. The Suite release alone does not pin that exact combination, so it must not be inferred for every independently installed Suite 1.3.4 environment. Input declarations that disagree with the selected component recipe cannot be treated as matching by Suite label alone.
+Suite **1.3.4 / AA 1.4.r2 / AC 1.2.1** is an explicitly selected comparison recipe supported by recorded component pairing. The Suite release alone does not pin that exact combination, so it must not be inferred for every independently installed Suite 1.3.4 environment. Input declarations that disagree with the selected component recipe cannot be treated as matching by Suite label alone.
 
-The lock also retains a separate legacy diagnostic combination, **AA 1.3.r2 + AC 1.2.1**, for existing preparation/regression interfaces. This recipe has no Suite identity and sits outside the eleven-Suite `asbench` panel. The original classifier of a publication must be established separately.
+The lock also retains a separate legacy diagnostic combination, **AA 1.3.r2 + AC 1.2.1**, for existing preparation/regression interfaces. This recipe has no Suite identity and sits outside the eleven-Suite `asconcordance` panel. The original classifier of a publication must be established separately.
 
 ## CNVkit mapping
 
@@ -29,8 +29,8 @@ AA 1.5.r7 uses the historical Mosek solver. AC 1.5.2 has the ecDNA and BFB field
 - [Suite 1.4.0](https://github.com/AmpliconSuite/AmpliconSuite-pipeline/releases/tag/v1.4.0) covers the AA1.5/AC1.4 generation.
 - [AC 1.5.1](https://github.com/AmpliconSuite/AmpliconClassifier/releases/tag/v1.5.1) includes coordinate/context fixes relevant to result comparison.
 - [Suite 1.6.0](https://github.com/AmpliconSuite/AmpliconSuite-pipeline/releases/tag/v1.6.0) introduces the coordinated Clarabel/FAN/BFBArchitect generation.
-- [Suite 1.6.1](https://github.com/AmpliconSuite/AmpliconSuite-pipeline/releases/tag/v1.6.1) includes stable downsampling changes. The benchmark defaults to disabled downsampling and therefore does not assess those changes under default settings.
-- [Suite 1.6.2](https://github.com/AmpliconSuite/AmpliconSuite-pipeline/releases/tag/v1.6.2) is the fixed current benchmark recipe.
+- [Suite 1.6.1](https://github.com/AmpliconSuite/AmpliconSuite-pipeline/releases/tag/v1.6.1) includes stable downsampling changes. The comparison defaults to disabled downsampling and therefore does not assess those changes under default settings.
+- [Suite 1.6.2](https://github.com/AmpliconSuite/AmpliconSuite-pipeline/releases/tag/v1.6.2) is the fixed current comparison recipe.
 
 ### Controlled check for Suite 1.6.1 downsampling
 

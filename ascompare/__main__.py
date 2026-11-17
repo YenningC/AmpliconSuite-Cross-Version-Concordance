@@ -21,7 +21,7 @@ def main():
     p=sub.add_parser('prepare'); p.add_argument('--version',required=True); p.add_argument('--out',required=True); p.add_argument('--lock')
     args=parser.parse_args()
     if args.command in ('check','run'):
-        parser.error('Legacy BAM workflows are disabled. Use asbench check/run --manifest with the bounded 0.2 schema; whole-genome operations are prohibited.')
+        parser.error('Legacy BAM workflows are disabled. Use asconcordance check/run --manifest with the bounded workflow manifest; whole-genome operations are prohibited.')
     from .versions import load_lock, verify_runtime, refresh_releases, prepare_sources
     if args.command=='releases':
         result=refresh_releases(args.out); print(json.dumps(result,ensure_ascii=False,default=str)); return 0

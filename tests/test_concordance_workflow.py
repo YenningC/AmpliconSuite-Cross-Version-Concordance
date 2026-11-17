@@ -7,12 +7,12 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from ascompare.benchmark import load_manifest,main,run_benchmark
-from ascompare.benchmark_demo import write_demo_manifest,SOURCE_VERSION,REFERENCE_VERSION
+from ascompare.concordance import load_manifest,main,run_concordance
+from ascompare.concordance_demo import write_demo_manifest,SOURCE_VERSION,REFERENCE_VERSION
 from ascompare.common import atomic_json,digest
 
 
-class BenchmarkWorkflowTests(unittest.TestCase):
+class ConcordanceWorkflowTests(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory();self.root=Path(self.temp.name).resolve()
         self.manifest=write_demo_manifest(self.root/'synthetic_inputs')
@@ -26,12 +26,12 @@ class BenchmarkWorkflowTests(unittest.TestCase):
         config,lock,entries=load_manifest(self.manifest)
         out=Path(out or self.root/'output')
         with ExitStack() as stack:
-            for target in ('ascompare.benchmark._validate_bam','ascompare.benchmark.run_bounded_downstream',
-                           'ascompare.benchmark.verify_runtime','ascompare.benchmark_cnv.run_local_upstream',
-                           'ascompare.benchmark_import.reclassify_result'):
+            for target in ('ascompare.concordance._validate_bam','ascompare.concordance.run_bounded_downstream',
+                           'ascompare.concordance.verify_runtime','ascompare.concordance_cnv.run_local_upstream',
+                           'ascompare.concordance_import.reclassify_result'):
                 stack.enter_context(patch(target,side_effect=AssertionError('No BAM/runtime operation permitted in this test')))
-            if not plots:stack.enter_context(patch('ascompare.benchmark_report._plots'))
-            summary=run_benchmark(config,lock,entries,out)
+            if not plots:stack.enter_context(patch('ascompare.concordance_report._plots'))
+            summary=run_concordance(config,lock,entries,out)
         records=json.loads((out/'downstream_records.json').read_text())
         return summary,records
 
@@ -120,7 +120,7 @@ class BenchmarkWorkflowTests(unittest.TestCase):
         bad_dir = self.manifest.parent / 'results/SYNTHETIC_01' / REFERENCE_VERSION / 'ac'
         profile = next(bad_dir.glob('*_amplicon_classification_profiles.tsv'))
         profile.write_text(profile.read_text().replace('amplicon_number', 'unsupported_header'))
-        with patch('ascompare.benchmark.run_bounded_downstream', side_effect=AssertionError('Check cannot run AA')):
+        with patch('ascompare.concordance.run_bounded_downstream', side_effect=AssertionError('Check cannot run AA')):
             self.assertEqual(main(['check', '--manifest', str(self.manifest), '--out', str(self.root/'check')]), 2)
         rows = json.loads((self.root/'check'/'import_format_check.json').read_text())
         self.assertEqual(len(rows), 6)
@@ -130,7 +130,7 @@ class BenchmarkWorkflowTests(unittest.TestCase):
 
     def test_cli_demo_uses_real_workflow_and_leaves_reusable_manifest(self):
         out=self.root/'cli_demo'
-        with patch('ascompare.benchmark_report._plots'):
+        with patch('ascompare.concordance_report._plots'):
             self.assertEqual(main(['demo','--out',str(out)]),0)
         proof=json.loads((out/'demo_provenance.json').read_text())
         self.assertFalse(proof['bam_used']);self.assertFalse(proof['AA_executed']);self.assertFalse(proof['AC_executed'])

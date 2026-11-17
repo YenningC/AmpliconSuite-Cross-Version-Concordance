@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from ascompare.benchmark_report import _upstream, write_benchmark_reports
+from ascompare.concordance_report import _upstream, write_concordance_reports
 from ascompare.statistics import AGREEMENT_METRICS
 
 
@@ -44,15 +44,15 @@ def accepted_options(config):
 
 
 def run(config, downstream, upstream):
-    with tempfile.TemporaryDirectory() as folder, patch("ascompare.benchmark_report._plots"):
-        summary = write_benchmark_reports(folder, downstream, upstream, config)
+    with tempfile.TemporaryDirectory() as folder, patch("ascompare.concordance_report._plots"):
+        summary = write_concordance_reports(folder, downstream, upstream, config)
         with (Path(folder)/"sample_similarity.tsv").open() as handle:
             summary["sample_rows_for_test"] = list(csv.DictReader(handle, delimiter="\t"))
         summary["report_for_test"] = (Path(folder)/"report.md").read_text()
         return summary
 
 
-class BenchmarkReportTests(unittest.TestCase):
+class ConcordanceReportTests(unittest.TestCase):
     def test_source_to_target_is_not_silently_replaced_by_reference_comparison(self):
         config, downstream, upstream = fixture()
         for row in downstream:
@@ -361,7 +361,7 @@ class BenchmarkReportTests(unittest.TestCase):
         downstream[2]["supported_labels"] = ["ecDNA"]
         upstream[0].update(calibration_status="unverified", native_recipe_match=False)
         with tempfile.TemporaryDirectory() as folder:
-            result = write_benchmark_reports(folder, downstream, upstream, config)
+            result = write_concordance_reports(folder, downstream, upstream, config)
             out = Path(folder)
             self.assertEqual(result["reference_version"], REF)
             self.assertTrue(all((out/f"similarity_ladder.{ext}").is_file() and (out/f"compatibility_table.{ext}").is_file()
