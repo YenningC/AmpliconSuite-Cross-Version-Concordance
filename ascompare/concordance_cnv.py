@@ -16,6 +16,7 @@ import shutil
 from .concordance_policy import guarded_command
 from .common import atomic_json, digest, now
 from .runner import execute, local_reference
+from .concordance_timing import measure, timed_cnv, timed_upstream
 
 
 class LocalFailure(Exception):
@@ -141,10 +142,12 @@ def _run_tool(python, script, args, policy, cwd, env, stage, timeout=3600):
     env = dict(env)
     env.setdefault('MPLCONFIGDIR', str(Path(cwd) / 'matplotlib_cache'))
     Path(env['MPLCONFIGDIR']).mkdir(parents=True, exist_ok=True)
-    try:
-        rc = execute(command, Path(cwd), env, logfile, timeout=timeout)
-    except TimeoutError as exc:
-        raise LocalFailure('failed', stage, str(exc)) from exc
+    with measure(stage, measurement_kind='subprocess', log_path=str(logfile)) as clock:
+        try:
+            rc = execute(command, Path(cwd), env, logfile, timeout=timeout)
+        except TimeoutError as exc:
+            raise LocalFailure('failed', stage, str(exc)) from exc
+        clock.status = 'complete' if rc == 0 else 'failed'
     if rc:
         message = f'{stage} exited {rc}; see {logfile}'
         text = logfile.read_text(errors='replace')[-12000:]
@@ -263,6 +266,7 @@ runpy.run_path(script, run_name='__main__')
 '''
 
 
+@timed_cnv
 def _cached_cnv(sample, runtime, config, windows, identity, out, policy, env):
     reference = config['reference']
     reference_mode = config.get('local_cnv', {}).get('reference_mode', 'matched_normal')
@@ -500,6 +504,7 @@ def _previous_filter_bed(manifest, identity):
         return None
 
 
+@timed_upstream
 def run_local_upstream(sample, runtime, entry, config, out):
     """Run bounded upstream once per sample/version; return candidate-level records."""
     out = Path(out).absolute()
@@ -607,10 +612,11 @@ def run_local_upstream(sample, runtime, entry, config, out):
                                                     producer_bed=str(previous_bed) if previous_bed else None)
         atomic_json(out / 'upstream_provenance.json', provenance)
         if previous_bed:
-            shutil.copyfile(previous_bed, output)
-            if digest(output) != digest(previous_bed):
-                raise LocalFailure('failed', 'seed_processing', 'Seed filter cache changed during reuse')
-            atomic_json(out / 'seed_processing.log', dict(cache_hit=True, producer_bed=str(previous_bed)))
+            with measure('seed_filter_cache', cache_status='hit', producer_id=str(previous_bed)):
+                shutil.copyfile(previous_bed, output)
+                if digest(output) != digest(previous_bed):
+                    raise LocalFailure('failed', 'seed_processing', 'Seed filter cache changed during reuse')
+                atomic_json(out / 'seed_processing.log', dict(cache_hit=True, producer_bed=str(previous_bed)))
         else:
             _run_tool(runtime['aa_python'], helper, args, policy, out, aa_env,
                       'seed_processing', settings.get('timeout_seconds', 3600))

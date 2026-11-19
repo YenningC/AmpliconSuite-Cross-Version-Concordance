@@ -8,6 +8,7 @@ Run these from the repository root after installing the comparison package. Inpu
 | `build_concordance_manifest.py` | Combine existing-result input with prepared sources and explicit runtime templates for `asconcordance` |
 | `create_runtime_envs.py` | Create explicit AA/AC environments from a scientific base environment; its historical CNVkit0.9.14 template is not the native CNVkit panel |
 | `prepare_synthetic_cnv_control.py` | Generate the indexed artificial tumor/normal BAMs, reference and BEDs used for the three-version source-matched CNVkit control; see the [fixture and runtime instructions](../docs/local_cnv_calibration.md#synthetic-control-fixture) |
+| `check_aa_optimization_control.py` | Compare two completed positive synthetic FULL and CYCLES runs. Check native files, per-Suite records and six public tables. See the [validation record](../docs/validation_status.md). |
 | `prepare_cnvkit_smoke_envs.py` | Prepare isolated exact-version CNVkit test environments |
 | `run_cnvkit_smoke.py` | Run the explicitly configured finite synthetic CNVkit integration test |
 | `probe_cnvkit_record.py`, `probe_clarabel.py`, `probe_mosek.py` | Component identity/solver diagnostics |

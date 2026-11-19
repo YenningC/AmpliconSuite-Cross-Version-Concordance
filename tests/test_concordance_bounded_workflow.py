@@ -108,8 +108,10 @@ print('BFBArchitect SYNTHETIC integration enabled')
     @staticmethod
     def make_verified(runtime,entry,env=None):
         return dict(ready=True,diagnostics=[],validation_level='SYNTHETIC_VERIFICATION_STUB_NOT_OFFICIAL_COMPONENTS',
-            aa={'version':entry['aa']['version'],'help':'--solver --no_cstats','manifest_sha256':'SYNTHETIC_AA'},
-            ac={'version':entry['ac']['version'],'manifest_sha256':'SYNTHETIC_AC'})
+            aa={'version':entry['aa']['version'],'help':'--solver --no_cstats','manifest_sha256':'SYNTHETIC_AA',
+                'packages':{'returncode':0,'stdout':'SYNTHETIC-aa-dependency==0.0.0\n'}},
+            ac={'version':entry['ac']['version'],'manifest_sha256':'SYNTHETIC_AC',
+                'packages':{'returncode':0,'stdout':'SYNTHETIC-ac-dependency==0.0.0\n'}})
 
     def run_downstream(self,name='bounded_job'):
         return run_bounded_downstream(self.sample,self.seeds,self.runtime,self.entry,self.verified,self.config,self.root/name)
@@ -208,7 +210,11 @@ pathlib.Path(str(prefix)+'_summary.txt').write_text('#Amplicons = 0\\n')
     def test_truncated_graph_creates_new_attempt_and_does_not_reuse_cache(self):
         first=self.run_downstream();graph=next((Path(first['run_dir'])/'aa').glob('*_graph.txt'));graph.write_text('')
         second=self.run_downstream();self.assertEqual(second['status'],'ok')
-        self.assertTrue(second['run_dir'].endswith('attempt_0002'));self.assertEqual(self.trace(),['AA','AC','AA','AC'])
+        self.assertTrue(second['run_dir'].endswith('attempt_0002'));self.assertEqual(self.trace(),['AA','AC','AA'])
+        self.assertFalse(second['component_cache']['aa']['hit'])
+        # The newly reconstructed graph/cycles match the original AA output;
+        # the independent, intact AC artifact remains valid for those bytes.
+        self.assertTrue(second['component_cache']['ac']['hit'])
         self.assertEqual(graph.read_text(),'')  # Failed prior evidence is retained.
 
     def test_caught_unbounded_and_budget_failures_cannot_become_negative(self):
@@ -302,7 +308,13 @@ pathlib.Path(str(prefix)+'_summary.txt').write_text('#Amplicons = 0\\n')
 
     def test_two_sample_with_bam_batch_runs_serially_and_keeps_one_patient_independent(self):
         result, out = self.run_public_workflow(name='synthetic_batch', n_samples=2)
-        self.assertEqual(self.trace(), ['AA', 'AC'] * 4)
+        self.assertEqual(self.trace(), ['AA', 'AC'] * 2)
+        records = json.loads((out / 'downstream_records.json').read_text())
+        self.assertEqual({r['sample_id'] for r in records}, {'SYNTHETIC_BATCH_0', 'SYNTHETIC_BATCH_1'})
+        for row in records:
+            expected_hit = row['sample_id'] == 'SYNTHETIC_BATCH_1'
+            self.assertEqual(row['component_cache']['aa']['hit'], expected_hit)
+            self.assertEqual(row['component_cache']['ac']['hit'], expected_hit)
         self.assertEqual([row[:2] for row in self.job_order], [
             ('SYNTHETIC_BATCH_0', 'suite-1.6.0'), ('SYNTHETIC_BATCH_0', 'suite-1.6.2'),
             ('SYNTHETIC_BATCH_1', 'suite-1.6.0'), ('SYNTHETIC_BATCH_1', 'suite-1.6.2')])

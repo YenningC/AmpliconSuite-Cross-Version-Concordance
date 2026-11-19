@@ -1,0 +1,110 @@
+{
+  "synthetic": true,
+  "optimized_aa_calls": 10,
+  "optimized_ac_calls": 11,
+  "scope": "Positive fixed-seed control on the supplied runs",
+  "reference": "suite-1.6.2",
+  "paired_units": 11,
+  "suite_outputs": {
+    "suite-1.2.2": {
+      "aa": "subprocess",
+      "ac": "subprocess",
+      "classification": [
+        "Linear"
+      ]
+    },
+    "suite-1.3.3": {
+      "aa": "subprocess",
+      "ac": "subprocess",
+      "classification": [
+        "Linear"
+      ]
+    },
+    "suite-1.3.4": {
+      "aa": "reused_verified_artifacts",
+      "ac": "subprocess",
+      "classification": [
+        "Linear"
+      ]
+    },
+    "suite-1.3.7": {
+      "aa": "subprocess",
+      "ac": "subprocess",
+      "classification": [
+        "Linear"
+      ]
+    },
+    "suite-1.4.0": {
+      "aa": "subprocess",
+      "ac": "subprocess",
+      "classification": [
+        "Linear"
+      ]
+    },
+    "suite-1.5.0": {
+      "aa": "subprocess",
+      "ac": "subprocess",
+      "classification": [
+        "Linear"
+      ]
+    },
+    "suite-1.5.2": {
+      "aa": "subprocess",
+      "ac": "subprocess",
+      "classification": [
+        "Linear"
+      ]
+    },
+    "suite-1.5.3": {
+      "aa": "subprocess",
+      "ac": "subprocess",
+      "classification": [
+        "Linear"
+      ]
+    },
+    "suite-1.6.0": {
+      "aa": "subprocess",
+      "ac": "subprocess",
+      "classification": [
+        "Linear"
+      ]
+    },
+    "suite-1.6.1": {
+      "aa": "subprocess",
+      "ac": "subprocess",
+      "classification": [
+        "Linear"
+      ]
+    },
+    "suite-1.6.2": {
+      "aa": "subprocess",
+      "ac": "subprocess",
+      "classification": [
+        "Linear"
+      ]
+    }
+  },
+  "native_files_compared": [
+    "aa/*_graph.txt",
+    "aa/*_cycles.txt",
+    "aa/*_summary.txt",
+    "ac/*amplicon_classification_profiles.tsv",
+    "ac/**/*_intervals.bed"
+  ],
+  "existing_report_tables": {
+    "result.tsv": "byte_identical",
+    "downstream_similarity_samples.tsv": "byte_identical",
+    "compatibility_combined.tsv": "byte_identical",
+    "upstream_statistics.tsv": "byte_identical",
+    "local_cnv_comparator_seeds.tsv": "identical_after_normalizing_recorded_output_paths",
+    "cohort_compatibility_metrics.tsv": "byte_identical"
+  },
+  "identical_report_png_sha256": {
+    "cohort_compatibility.png": "22cd4e85c85fc21daed7b7a8c51f42f3a3cba69cf3963b0a6b11bb24dfd46cb7",
+    "compatibility_table.png": "eb9d4e20520a9888d2214d8173f4f736e07df7a118a44d2eafbe9083073cd582",
+    "local_cnv_comparator_cohort.png": "f2ad9fbf8fb0b06d54406489a8bfc3d5b0610b8b0486096e4c00e465084a3dda",
+    "similarity_ladder.png": "d1088219b35e891fd7932e1d9fb1f928d697192cfc261673186713951ecefb4a",
+    "upstream_retention_ladder.png": "f94718eaecc1a7840072177146c62098e9a1ef71b0335581a7bd2d771fe31225",
+    "sample_ladders/SYNTHETIC_LOCAL_CNV__aa_ac__suite-1.6.1_3ca07ce7.png": "fa4dd3df7e021d7f584a58b4c71c53aa33417c25fb9bdcfbf91eb79814a5d798"
+  }
+}

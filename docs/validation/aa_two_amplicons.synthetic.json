@@ -1,0 +1,233 @@
+{
+  "label": "SYNTHETIC_ONLY",
+  "patient_data_access": false,
+  "detailed_receipt_sha256": "ce9ee9a1adc0af910ab3e71d8c895de5d1a4106a4e4193a8749aa4e5295fad61",
+  "input_bam_sha256": "d54da3dfa0012e2b0380da6ffa3839a06cdeedf1ba3b23f2ef3e65a8f1e85b4e",
+  "input_bai_sha256": "761d74b02221daa10a766da670e12a5a91b4dd0b6869911201f4ae9cb8ae747f",
+  "seed_bed_sha256": "6fc6b326badd5f5434f27bb64d053929c050fa21d6d460adb5ff4638892466ee",
+  "generated_read_count": 309128,
+  "reference": "hg19_API_label_only_all_reference_bases_and_alignments_are_artificial",
+  "extendmode": "EXPLORE",
+  "python_hash_seed": 0,
+  "classifier_version": "2.0.1 (held fixed, not historical paired AC)",
+  "cases": [
+    {
+      "label": "disabled_sampling",
+      "aa_version": "1.6.r2",
+      "aa_commit": "c3350be450bd24bbd34891428be1dce1c78a059b",
+      "requested_downsample": -1,
+      "effective_ratio": {
+        "FULL": 1.0,
+        "CYCLES": 1.0
+      },
+      "aa_wall_seconds": {
+        "FULL": 26.45449,
+        "CYCLES": 14.680676
+      },
+      "aa_ac_both_exit_zero": true,
+      "native_sources_unchanged": true,
+      "graph_cycles_identical": true,
+      "graph_cycles_sha256": {
+        "reconstruction_amplicon1_graph.txt": "bef84e2bcff5721db5ded6ed431c1df327f5b24aeedcf5a79ee2a23627f8a5e9",
+        "reconstruction_amplicon2_cycles.txt": "4ba3c22d60b7c9c6af86852fbf4f61a2471c99e213319da147f52cb060ac8fd2",
+        "reconstruction_amplicon1_cycles.txt": "c998f8978d52388f905f4be3fd515b46b763ca83ac589acfa943f15879dcf882",
+        "reconstruction_amplicon2_graph.txt": "49b1192e04f083e1d07308afc5a779fc5149d5f242e04bc7efacdf386017981a"
+      },
+      "ac_profiles_identical": true,
+      "ac_profile_sha256": "ba2a5b82ecbed9ba3f74cc56fe90eca12c1b067761f8cb93be425349056eaf0f",
+      "ac_feature_beds_identical": true,
+      "ac_feature_bed_sha256": {
+        "classification_classification_bed_files/reconstruction_amplicon2_Linear_1_intervals.bed": "cb17c66f48167543c4bc991e94137a395616da8d296f6bac63364b85806329e8",
+        "classification_classification_bed_files/reconstruction_amplicon1_ecDNA_1_intervals.bed": "d38583272cba90cedaea3be987df80ca17b8e078a74a6f64a418c070cb605f27"
+      },
+      "calls": [
+        "Cyclic/ecDNA+",
+        "Linear"
+      ],
+      "common_intermediate_files_identical": true
+    },
+    {
+      "label": "disabled_sampling",
+      "aa_version": "1.4.r2",
+      "aa_commit": "3a188c49df5ab47cbef97e685bc853a15fbeb1ad",
+      "requested_downsample": -1,
+      "effective_ratio": {
+        "FULL": 1.0,
+        "CYCLES": 1.0
+      },
+      "aa_wall_seconds": {
+        "FULL": 19.967864,
+        "CYCLES": 17.128075
+      },
+      "aa_ac_both_exit_zero": true,
+      "native_sources_unchanged": true,
+      "graph_cycles_identical": true,
+      "graph_cycles_sha256": {
+        "reconstruction_amplicon1_graph.txt": "19a93372c5c4f7996527a4fe7d9e5ba0ffcf5234a56c3683e299d74357b6483e",
+        "reconstruction_amplicon2_cycles.txt": "73a9c56a7215937bdeb66e32d949c927a9afbbf2750228b56f010808de2b9b63",
+        "reconstruction_amplicon1_cycles.txt": "8329d10c87630924e9559ae27cd57632b89f34394778fabb50f20ff522605c51",
+        "reconstruction_amplicon2_graph.txt": "39d1c04c22a979ff41b5091e32764100754411b081a447be15d593d220e8d9dd"
+      },
+      "ac_profiles_identical": true,
+      "ac_profile_sha256": "ba2a5b82ecbed9ba3f74cc56fe90eca12c1b067761f8cb93be425349056eaf0f",
+      "ac_feature_beds_identical": true,
+      "ac_feature_bed_sha256": {
+        "classification_classification_bed_files/reconstruction_amplicon2_Linear_1_intervals.bed": "cb17c66f48167543c4bc991e94137a395616da8d296f6bac63364b85806329e8",
+        "classification_classification_bed_files/reconstruction_amplicon1_ecDNA_1_intervals.bed": "d38583272cba90cedaea3be987df80ca17b8e078a74a6f64a418c070cb605f27"
+      },
+      "calls": [
+        "Cyclic/ecDNA+",
+        "Linear"
+      ],
+      "common_intermediate_files_identical": true
+    },
+    {
+      "label": "requested_10",
+      "aa_version": "1.6.r2",
+      "aa_commit": "c3350be450bd24bbd34891428be1dce1c78a059b",
+      "requested_downsample": 10,
+      "effective_ratio": {
+        "FULL": 1.0,
+        "CYCLES": 1.0
+      },
+      "aa_wall_seconds": {
+        "FULL": 10.514697,
+        "CYCLES": 5.689846
+      },
+      "aa_ac_both_exit_zero": true,
+      "native_sources_unchanged": true,
+      "graph_cycles_identical": true,
+      "graph_cycles_sha256": {
+        "reconstruction_amplicon1_graph.txt": "bef84e2bcff5721db5ded6ed431c1df327f5b24aeedcf5a79ee2a23627f8a5e9",
+        "reconstruction_amplicon2_cycles.txt": "4ba3c22d60b7c9c6af86852fbf4f61a2471c99e213319da147f52cb060ac8fd2",
+        "reconstruction_amplicon1_cycles.txt": "c998f8978d52388f905f4be3fd515b46b763ca83ac589acfa943f15879dcf882",
+        "reconstruction_amplicon2_graph.txt": "49b1192e04f083e1d07308afc5a779fc5149d5f242e04bc7efacdf386017981a"
+      },
+      "ac_profiles_identical": true,
+      "ac_profile_sha256": "ba2a5b82ecbed9ba3f74cc56fe90eca12c1b067761f8cb93be425349056eaf0f",
+      "ac_feature_beds_identical": true,
+      "ac_feature_bed_sha256": {
+        "classification_classification_bed_files/reconstruction_amplicon2_Linear_1_intervals.bed": "cb17c66f48167543c4bc991e94137a395616da8d296f6bac63364b85806329e8",
+        "classification_classification_bed_files/reconstruction_amplicon1_ecDNA_1_intervals.bed": "d38583272cba90cedaea3be987df80ca17b8e078a74a6f64a418c070cb605f27"
+      },
+      "calls": [
+        "Cyclic/ecDNA+",
+        "Linear"
+      ],
+      "common_intermediate_files_identical": true
+    },
+    {
+      "label": "requested_10",
+      "aa_version": "1.4.r2",
+      "aa_commit": "3a188c49df5ab47cbef97e685bc853a15fbeb1ad",
+      "requested_downsample": 10,
+      "effective_ratio": {
+        "FULL": 1.0,
+        "CYCLES": 1.0
+      },
+      "aa_wall_seconds": {
+        "FULL": 12.213946,
+        "CYCLES": 10.04069
+      },
+      "aa_ac_both_exit_zero": true,
+      "native_sources_unchanged": true,
+      "graph_cycles_identical": true,
+      "graph_cycles_sha256": {
+        "reconstruction_amplicon1_graph.txt": "19a93372c5c4f7996527a4fe7d9e5ba0ffcf5234a56c3683e299d74357b6483e",
+        "reconstruction_amplicon2_cycles.txt": "73a9c56a7215937bdeb66e32d949c927a9afbbf2750228b56f010808de2b9b63",
+        "reconstruction_amplicon1_cycles.txt": "8329d10c87630924e9559ae27cd57632b89f34394778fabb50f20ff522605c51",
+        "reconstruction_amplicon2_graph.txt": "39d1c04c22a979ff41b5091e32764100754411b081a447be15d593d220e8d9dd"
+      },
+      "ac_profiles_identical": true,
+      "ac_profile_sha256": "ba2a5b82ecbed9ba3f74cc56fe90eca12c1b067761f8cb93be425349056eaf0f",
+      "ac_feature_beds_identical": true,
+      "ac_feature_bed_sha256": {
+        "classification_classification_bed_files/reconstruction_amplicon2_Linear_1_intervals.bed": "cb17c66f48167543c4bc991e94137a395616da8d296f6bac63364b85806329e8",
+        "classification_classification_bed_files/reconstruction_amplicon1_ecDNA_1_intervals.bed": "d38583272cba90cedaea3be987df80ca17b8e078a74a6f64a418c070cb605f27"
+      },
+      "calls": [
+        "Cyclic/ecDNA+",
+        "Linear"
+      ],
+      "common_intermediate_files_identical": true
+    },
+    {
+      "label": "active_0p25",
+      "aa_version": "1.6.r2",
+      "aa_commit": "c3350be450bd24bbd34891428be1dce1c78a059b",
+      "requested_downsample": 0.25,
+      "effective_ratio": {
+        "FULL": 0.50005,
+        "CYCLES": 0.50005
+      },
+      "aa_wall_seconds": {
+        "FULL": 12.096506,
+        "CYCLES": 6.995775
+      },
+      "aa_ac_both_exit_zero": true,
+      "native_sources_unchanged": true,
+      "graph_cycles_identical": true,
+      "graph_cycles_sha256": {
+        "reconstruction_amplicon1_graph.txt": "a3743849f8f8979235e571461ec0cd40ff346156dc9c172a03600169ad99026a",
+        "reconstruction_amplicon2_cycles.txt": "0902c70ed90aa9988ff3a8a8522e825c9df0cae90c008a0567d303a4d7d3c81a",
+        "reconstruction_amplicon1_cycles.txt": "6d35be03f44efc132e8abb7e24a434923e66cc568e13d4ea04c98e5fc1df40a6",
+        "reconstruction_amplicon2_graph.txt": "bd4159acb92a95c572ecaedb51352d18223fd81a1db764a15324d9f3f9ac6bc0"
+      },
+      "ac_profiles_identical": true,
+      "ac_profile_sha256": "ba2a5b82ecbed9ba3f74cc56fe90eca12c1b067761f8cb93be425349056eaf0f",
+      "ac_feature_beds_identical": true,
+      "ac_feature_bed_sha256": {
+        "classification_classification_bed_files/reconstruction_amplicon2_Linear_1_intervals.bed": "08ddff24b00cb1825be3bc12814c4412e39a2a06f11ba922b5328a9f4332c37a",
+        "classification_classification_bed_files/reconstruction_amplicon1_ecDNA_1_intervals.bed": "d38583272cba90cedaea3be987df80ca17b8e078a74a6f64a418c070cb605f27"
+      },
+      "calls": [
+        "Cyclic/ecDNA+",
+        "Linear"
+      ],
+      "common_intermediate_files_identical": true
+    },
+    {
+      "label": "active_0p25",
+      "aa_version": "1.4.r2",
+      "aa_commit": "3a188c49df5ab47cbef97e685bc853a15fbeb1ad",
+      "requested_downsample": 0.25,
+      "effective_ratio": {
+        "FULL": 0.50005,
+        "CYCLES": 0.50005
+      },
+      "aa_wall_seconds": {
+        "FULL": 10.292299,
+        "CYCLES": 6.204782
+      },
+      "aa_ac_both_exit_zero": true,
+      "native_sources_unchanged": true,
+      "graph_cycles_identical": true,
+      "graph_cycles_sha256": {
+        "reconstruction_amplicon1_graph.txt": "7ad7c7ae6e03a7193d8c1f596befdb94458bbed4918c25b367ae4c74d4e20c5b",
+        "reconstruction_amplicon2_cycles.txt": "24fb882776747ccd133e5ba5a12aa5ef1cc1371725a41df0612385d64fae1774",
+        "reconstruction_amplicon1_cycles.txt": "e6a43845eeff7ab587d5343a4fe6448d00ba312ec3ee21f123950e4e6d0e7010",
+        "reconstruction_amplicon2_graph.txt": "5c3aca2f23ab19e8a3b7eb80c922bc4732bf772715e67ec3eafaf24b73e99c44"
+      },
+      "ac_profiles_identical": true,
+      "ac_profile_sha256": "ba2a5b82ecbed9ba3f74cc56fe90eca12c1b067761f8cb93be425349056eaf0f",
+      "ac_feature_beds_identical": true,
+      "ac_feature_bed_sha256": {
+        "classification_classification_bed_files/reconstruction_amplicon2_Linear_1_intervals.bed": "5b51db15afc1c63525b4c506571e95215adffc26a39f59921cba3fca5a81dba1",
+        "classification_classification_bed_files/reconstruction_amplicon1_ecDNA_1_intervals.bed": "75172cc4e43130995d565a71ee0c184babbaab301fd1555ac83392733ce2138b"
+      },
+      "calls": [
+        "Cyclic/ecDNA+",
+        "Linear"
+      ],
+      "common_intermediate_files_identical": true
+    }
+  ],
+  "limitations": [
+    "Synthetic regression evidence only; not patient compatibility or biological truth.",
+    "Requested 10X is inactive because the artificial background has approximately 0.5X coverage; effective ratio is 1.",
+    "Requested 0.25X activates approximately 0.50005 sampling ratio to test the active sampling path; it does not validate 10X high-depth data.",
+    "FULL includes extra plot-side calculations/cache use and figures; observed scientific equality is limited to these recipes/configurations/inputs.",
+    "Initial -1 runs had cold font caches; later paired runs used copied warm font caches. Times are descriptive, not standardized performance estimates.",
+    "Legacy AA1.4.r2 uses Mosek; reference AA1.6.r2 uses Clarabel. AC2.0.1 is held fixed in this experiment and is not the historical paired AC."
+  ]
+}

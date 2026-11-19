@@ -23,7 +23,7 @@
     "cnsize_min": 50000
   },
   "sampling": {"max_seeds": 10, "random_seed": 20261117},
-  "aa_parameters": {"downsample": -1},
+  "aa_parameters": {"downsample": -1, "runmode": "CYCLES"},
   "ac_parameters": {"min_size": 50000, "min_flow": 1.0},
   "io_policy": {
     "max_fetch_bp": 50000000,

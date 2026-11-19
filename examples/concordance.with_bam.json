@@ -19,7 +19,7 @@
   "local_cnv": {"reference_mode": "matched_normal", "background_bed": "/data/validated_background.bed", "flank_bp": 100000,
     "bin_size": 1000, "max_window_bp": 25000000, "min_seed_overlap": 1.0, "cngain": 4.5, "cnsize_min": 50000},
   "sampling": {"max_seeds": 10, "random_seed": 20261117},
-  "aa_parameters": {"downsample": -1}, "ac_parameters": {"min_size": 50000, "min_flow": 1.0},
+  "aa_parameters": {"downsample": -1, "runmode": "CYCLES"}, "ac_parameters": {"min_size": 50000, "min_flow": 1.0},
   "io_policy": {"max_fetch_bp": 50000000, "max_total_fetch_bp": 500000000, "max_total_reads": 20000000},
   "job_timeout_seconds": 3600,
   "statistics": {"primary_pairs": [], "min_samples": 20, "margins": {}, "upstream_loss_margin": null}

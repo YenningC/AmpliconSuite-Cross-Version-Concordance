@@ -17,13 +17,14 @@ from .runner import empty_record, execute, local_reference, check_ac_runtime, pr
 from .versions import load_lock, verify_runtime
 from .concordance_policy import guarded_command
 from .concordance_aa_stats import seed_stage_measurement, stage_measurement
+from .concordance_timing import TimingSession, measure, timed_call, record_native_aa
 
 PROGRAM_VERSION = __version__
 FIXED_REFERENCE = 'suite-1.6.2'
 PATH_KEYS = {'alignment', 'index', 'normal_alignment', 'normal_index', 'seeds_bed',
              'source_seed_bed', 'baseline_cns', 'aa_dir', 'ac_dir', 'run_dir',
              'result_dir', 'stages_json', 'baseline_provenance', 'fasta', 'aa_data_repo', 'background_bed',
-             'aa_script', 'ac_script', 'suite_script', 'cnvkit_script', 'version_lock'}
+             'aa_script', 'ac_script', 'suite_script', 'cnvkit_script', 'version_lock', 'reuse_aa_from'}
 
 
 def fast_fingerprint(path):
@@ -202,9 +203,16 @@ def load_manifest(path):
         raise ValueError('local_cnv.comparison_versions requires a list of exact CNVkit versions')
     if config.get('threads', 1) != 1:
         raise ValueError('The bounded concordance currently executes serially')
-    for key, allowed in (('aa_parameters', {'downsample'}), ('ac_parameters', {'min_size', 'min_flow'})):
+    for key, allowed in (('aa_parameters', {'downsample', 'runmode'}), ('ac_parameters', {'min_size', 'min_flow'})):
         if not isinstance(config.get(key, {}), dict) or set(config.get(key, {})) - allowed:
             raise ValueError('Unsupported parameters in ' + key + '; no parameters are silently ignored')
+    if config.get('aa_parameters', {}).get('runmode', 'CYCLES') not in ('CYCLES', 'FULL'):
+        raise ValueError('aa_parameters.runmode must be CYCLES or FULL')
+    if 'reuse_aa_from' in config:
+        previous = config['reuse_aa_from']
+        if (config['mode'] != 'with_bam' or not isinstance(previous, str) or not previous
+                or not (Path(previous) / '.component_cache' / 'aa').is_dir()):
+            raise ValueError('reuse_aa_from requires an existing with_bam output with a completed AA cache')
     import math
     for key, default in (('min_size', 50000), ('min_flow', 1.0)):
         value = float(config.get('ac_parameters', {}).get(key, default))
@@ -329,171 +337,9 @@ def _new_attempt(job, create=True):
 
 
 def run_bounded_downstream(sample, seeds, runtime, entry, verified, config, out, measurement=None):
-    """One joint selected-seed job per version. Connected expansion is not clipped."""
-    from .parsing import parse_run, aa_amplicon_count
-    supported = entry.get('supported_labels', entry.get('supported_classes', []))
-    vid, sid = runtime['id'], sample['sample_id']
-    identity = {name: {k: verified.get(name, {}).get(k) for k in ('version', 'manifest_sha256', 'sha256')}
-                for name in ('aa', 'ac')}
-    identity['packages'] = {name: verified.get(name, {}).get('packages', {}).get('stdout') for name in ('aa', 'ac')}
-    identity['bfb'] = verified.get('bfb_probe', {}).get('stdout')
-    identity['runtime_variants'] = verified.get('runtime_variants', [])
-    effective_env = dict(os.environ, **runtime.get('env', {}))
-    identity['solver_environment'] = {k: effective_env.get(k) for k in
-        ('MOSEKLM_LICENSE_FILE', 'GRB_LICENSE_FILE', 'DYLD_LIBRARY_PATH', 'LD_LIBRARY_PATH', 'PATH')}
-    # Some historical AA versions subsample using Python's per-process hash.
-    # Select a reproducible default, retaining an explicit caller's number.
-    hash_seed = effective_env.get('PYTHONHASHSEED', '0')
-    identity['python_hash_seed'] = hash_seed
-    license_paths = [Path.home() / 'mosek' / 'mosek.lic']
-    for k in ('MOSEKLM_LICENSE_FILE', 'GRB_LICENSE_FILE'):
-        value = effective_env.get(k)
-        if value and '@' not in value:
-            license_paths.append(Path(value).expanduser())
-    identity['license_file_metadata_only'] = [{
-        'path': str(p), 'exists': p.is_file(),
-        'bytes': p.stat().st_size if p.is_file() else None,
-        'mtime_ns': p.stat().st_mtime_ns if p.is_file() else None} for p in license_paths]
-    background = measurement or dict(mode='native_measurement', reason='No eligible same-version seed-stage measurement')
-    if (background['mode'] == 'same_version_seed_stage'
-            and any(c.isspace() for c in str(Path(sample['alignment']).resolve()))
-            and any(c.isspace() for c in str(Path(out).absolute()))):
-        background = dict(mode='native_measurement',
-            reason='BAM and working paths both contain whitespace; native AA cannot match a private cache alias')
-    reuse_stats = background['mode'] == 'same_version_seed_stage'
-    signature = _signature(dict(seeds=seeds, background_mode=background['mode'],
-        raw_stats_sha256=background.get('sha256'), stats_handoff_sha256=digest(Path(__file__).with_name('concordance_aa_stats.py')),
-        inputs=sample['_input_identities'], runtime=runtime,
-        verified=identity, reference=config['reference'], reference_identity=config.get('_reference_identity'), policy=config.get('io_policy', {}),
-        runner_sha256=digest(__file__), ac_input_writer_sha256=digest(Path(__file__).with_name('runner.py')),
-        policy_executor_sha256=digest(Path(__file__).with_name('concordance_policy.py')),
-        aa_parameters=config.get('aa_parameters', {}), ac_parameters=config.get('ac_parameters', {})))
-    cached = _cached_result(out, signature)
-    if cached:
-        print('  verified AA+AC cache reused', flush=True)
-        fresh = parse_run(cached['run_dir'], sid, '__selected_seeds__', vid, supported,
-                          reference_lengths=config.get('_reference_lengths'))
-        fresh.update(run_dir=cached['run_dir'], analysis_kind='aa_ac', source_version=sample['source_version'],
-            source_aa_version=entry['aa']['version'], provenance_kind='bounded_reconstruction',
-            reference_scope='bounded_indexed_BAM_connected_reconstruction',
-            component_versions={k: entry[k]['version'] for k in ('aa', 'ac')})
-        fresh['comparison_eligible'] = fresh['status'] in ('ok', 'not_detected')
-        return fresh
-    attempt = _new_attempt(out)
-    for name in ('aa', 'ac'):
-        (attempt / name).mkdir()
-    stages, stage = {}, 'input_check'
-    record = None
-    try:
-        if not re.fullmatch(r'[0-9]{1,10}', hash_seed) or int(hash_seed) > 4294967295:
-            raise ValueError('Bounded AA requires a numeric PYTHONHASHSEED between 0 and 4294967295 for reproducible downsampling')
-        if not verified.get('ready'):
-            raise ValueError('Runtime source/version checks failed: ' + '; '.join(verified.get('diagnostics', [])))
-        bed = attempt / 'selected_seeds.bed'
-        bed.write_text(''.join(f'{s["chrom"]}\t{s["start"]}\t{s["end"]}\t{s["seed_id"]}\n' for s in seeds))
-        env = dict(os.environ)
-        env.update(runtime.get('env', {}))
-        env.update(AA_DATA_REPO=str(local_reference(config['reference']['aa_data_repo'], attempt / 'reference')),
-                   PYTHONDONTWRITEBYTECODE='1', MPLCONFIGDIR=str(attempt / 'mplcache'),
-                   OMP_NUM_THREADS='1', OPENBLAS_NUM_THREADS='1')
-        bins = [str(Path(runtime[k]).absolute().parent) for k in ('aa_python', 'ac_python')]
-        env['PATH'] = os.pathsep.join(bins + runtime.get('extra_path', []) + [env.get('PATH', '')])
-        params = config.get('aa_parameters', {})
-        aaargs = ['--bam', sample['alignment'], '--bed', str(bed), '--out', str(attempt / 'aa' / 'reconstruction'),
-                  '--ref', sample['reference_build'], '--runmode', 'FULL', '--extendmode', 'EXPLORE',
-                  '--downsample', str(params.get('downsample', -1))]
-        help_text = verified.get('aa', {}).get('help', '')
-        evidence = {k: v for k, v in background.items() if k != 'fields'}
-        evidence.update(original_bam=sample['alignment'], reuse_confirmed=False, python_hash_seed=hash_seed)
-        atomic_json(attempt / 'aa_background.json', evidence)
-        if reuse_stats:
-            aaargs[1] = stage_measurement(background, attempt, sample['alignment'])
-            evidence['reader_bam_path'] = aaargs[1]
-            evidence['staged_sha256'] = digest(attempt / 'reference' / 'coverage.stats')
-            atomic_json(attempt / 'aa_background.json', evidence)
-        elif '--no_cstats' in help_text:
-            aaargs.append('--no_cstats')
-        solver = runtime.get('solver', 'clarabel' if entry['aa']['version'].startswith('1.6.') else 'mosek')
-        if '--solver' in help_text:
-            aaargs.extend(['--solver', solver])
-        elif solver != 'mosek':
-            raise ValueError('Historical AA solver cannot be silently replaced')
-        stage = 'aa'
-        command = guarded_command(runtime['aa_python'], runtime['aa_script'], aaargs, config['_io_policy_path'])
-        stages[stage] = dict(status='running', argv=command, started=now())
-        atomic_json(attempt / 'stages.json', stages)
-        rc = execute(command, attempt, dict(env, PYTHONHASHSEED=hash_seed), attempt / 'aa.log',
-                     timeout=config.get('job_timeout_seconds', 3600))
-        stages[stage].update(status='complete' if rc == 0 else 'failed', returncode=rc, ended=now())
-        atomic_json(attempt / 'stages.json', stages)
-        aa_log = (attempt / 'aa.log').read_text(errors='replace')
-        if reuse_stats:
-            evidence['reuse_confirmed'] = ('Reusing cstats from ' + str(attempt / 'reference' / 'coverage.stats') in aa_log
-                and digest(attempt / 'reference' / 'coverage.stats') == evidence['staged_sha256'])
-            atomic_json(attempt / 'aa_background.json', evidence)
-        if rc:
-            for audit in sorted(attempt.glob('bam_access.*.json')):
-                access = json.loads(audit.read_text())
-                if access.get('blocked'):
-                    raise RuntimeError(access['blocked'][0] + '; see ' + audit.name)
-            raise RuntimeError('Bounded AA failed; see aa.log')
-        if reuse_stats and not evidence['reuse_confirmed']:
-            raise RuntimeError('Native AA did not confirm use of its staged coverage.stats')
-        if 'Traceback (most recent call last)' in aa_log:
-            raise RuntimeError('AA logged an exception despite exit zero')
-        cycles = sorted((attempt / 'aa').glob('*_amplicon*_cycles.txt'))
-        if aa_amplicon_count(attempt) != len(cycles):
-            raise ValueError('Incomplete AA output')
-        if cycles:
-            stage = 'ac'
-            inputfile = prepare_ac_input(attempt)
-            p = config.get('ac_parameters', {})
-            command = [runtime['ac_python'], runtime['ac_script'], '-i', str(inputfile),
-                       '--ref', sample['reference_build'], '-o', str(attempt / 'ac' / 'classification'),
-                       '--min_size', str(p.get('min_size', 50000)), '--min_flow', str(p.get('min_flow', 1.0))]
-            stages[stage] = dict(status='running', argv=command, started=now())
-            atomic_json(attempt / 'stages.json', stages)
-            acenv = dict(env)
-            acenv['PATH'] = os.pathsep.join([bins[1], bins[0]] + runtime.get('extra_path', []) + [os.environ.get('PATH', '')])
-            rc = execute(command, attempt, acenv, attempt / 'ac.log', timeout=config.get('job_timeout_seconds', 3600))
-            stages[stage].update(status='complete' if rc == 0 else 'failed', returncode=rc, ended=now())
-            atomic_json(attempt / 'stages.json', stages)
-            if rc:
-                raise RuntimeError('AC failed; see ac.log')
-            log = (attempt / 'ac.log').read_text(errors='replace')
-            native_log = attempt / 'ac' / 'classification.log'
-            if native_log.is_file():
-                log += '\n' + native_log.read_text(errors='replace')
-            if 'Traceback (most recent call last)' in log:
-                raise RuntimeError('AC traceback despite process exit status')
-            check_ac_runtime(log, entry['ac']['version'])
-            if entry['ac']['version'].startswith('2.') and (not native_log.is_file() or not re.search(r' - INFO - Complete\s*$', native_log.read_text(errors='replace'))):
-                raise RuntimeError('AC2 final completion marker missing')
-        else:
-            stages['ac'] = dict(status='skipped_zero_amplicons')
-            atomic_json(attempt / 'stages.json', stages)
-        stage = 'result_reading'
-        record = parse_run(attempt, sid, '__selected_seeds__', vid, supported,
-                           reference_lengths=config.get('_reference_lengths'))
-    except KeyboardInterrupt:
-        stages[stage] = dict(status='interrupted', reason='User interruption; no result inferred')
-        atomic_json(attempt / 'stages.json', stages)
-        raise
-    except Exception as exc:
-        stages.setdefault(stage, {}).update(status='failed', reason=str(exc))
-        atomic_json(attempt / 'stages.json', stages)
-        record = empty_record(sid, '__selected_seeds__', vid, 'failed', stage, str(exc), supported_labels=supported)
-    finally:
-        alias = attempt / 'coverage_input.bam'
-        if alias.is_symlink():
-            alias.unlink()
-    record.update(run_dir=str(attempt), analysis_kind='aa_ac', source_version=sample['source_version'],
-                  source_aa_version=entry['aa']['version'], provenance_kind='bounded_reconstruction',
-                  comparison_eligible=record['status'] in ('ok', 'not_detected'),
-                  reference_scope='bounded_indexed_BAM_connected_reconstruction',
-                  component_versions={k: entry[k]['version'] for k in ('aa', 'ac')})
-    _save_cache(out, signature, record)
-    return record
+    """Run or integrity-check each exact AA and AC stage independently."""
+    from .concordance_components import run_component_downstream
+    return run_component_downstream(sample, seeds, runtime, entry, verified, config, out, measurement)
 
 
 def _bridge(original, replay, seeds):
@@ -540,7 +386,8 @@ def run_concordance(config, lock, entries, out, check_only=False):
         progress_path = out / 'sample_progress.json'
         previous_progress = progress_path.read_bytes() if progress_path.is_file() else None
         try:
-            return _run_locked(config, lock, entries, out, check_only)
+            with TimingSession(out):
+                return _run_locked(config, lock, entries, out, check_only)
         except (Exception, KeyboardInterrupt) as exc:
             try:
                 if progress_path.is_file() and progress_path.read_bytes() != previous_progress:
@@ -615,71 +462,73 @@ def _run_locked(config, lock, entries, out, check_only):
         sid, source = sample['sample_id'], sample['source_version']
         record_progress(sample, 'checking')
         print(f'[{sample_index}/{len(config["samples"])}] Input {sid}: source={source}, mode={config["mode"]}', flush=True)
-        try:
-            build = config.get('reference', {}).get('build', sample['reference_build'])
-            if build != sample['reference_build']:
-                raise ValueError('Reference build differs between sample and configuration')
-            seeds_path = sample.get('seeds_bed') or sample['source_result'].get('seeds_bed')
-            seeds = read_seed_bed(seeds_path, lengths) if seeds_path else []
-            sample['seeds'] = seeds
-            sample['upstream_seed_ids'] = [s['seed_id'] for s in seeds]
-            if seeds_path:
-                sample['seeds_bed'] = seeds_path
-                source_files.append(dict(path=seeds_path, sha256=digest(seeds_path)))
-            specs = [(source, sample['source_result'])] + [(r['version'], r) for r in sample['comparison_results']]
-            for vid, spec in specs:
-                if check_only:
-                    from .concordance_import import inspect_import_format
-                    entry = entries[vid]
-                    categories = entry.get('supported_labels', entry.get('supported_classes', []))
-                    result = inspect_import_format(spec, categories)
-                    import_checks.append(dict(sample_id=sid, version=vid, **result))
-                try:
-                    if spec.get('reference_build', sample['reference_build']) != sample['reference_build']:
-                        raise ValueError('Imported result reference_build differs from the sample declaration')
-                    if not Path(spec.get('aa_dir', '')).is_dir() or not Path(spec.get('ac_dir', '')).is_dir():
-                        raise ValueError('Imported AA/AC directory is missing')
-                    if len(list(Path(spec['aa_dir']).glob('*_summary.txt'))) != 1:
-                        raise ValueError('Expected one AA summary for each imported result')
-                    artifact_total = 0
-                    for path, _ in _artifacts(spec.get('aa_dir', ''), spec.get('ac_dir')):
-                        if path.is_symlink() or not path.is_file():
-                            raise ValueError('Only regular small result files can be imported')
-                        artifact_total += path.stat().st_size
-                        if path.stat().st_size > MAX_FILE_BYTES or artifact_total > MAX_TOTAL_BYTES:
-                            raise ValueError('Result artifact size limit exceeded')
-                        source_files.append(dict(path=str(path.resolve()), sha256=digest(path)))
-                    for key in ('seeds_bed', 'stages_json'):
-                        if spec.get(key) and Path(spec[key]).is_file():
-                            source_files.append(dict(path=spec[key], sha256=digest(spec[key])))
-                except (OSError, ValueError, KeyError) as exc:
-                    if spec is sample['source_result']:
-                        raise
-                    spec['_input_error'] = str(exc)
-            if config['mode'] == 'with_bam':
-                for key in ('baseline_cns', 'source_seed_bed', 'baseline_provenance'):
-                    if sample.get(key) and Path(sample[key]).is_file():
-                        source_files.append(dict(path=sample[key], sha256=digest(sample[key]), kind=key))
-                sample['_input_identities'] = _validate_bam(sample, config, lengths)
-                source_files.extend(sample['_input_identities'])
-                policy = dict(config.get('io_policy', {}))
-                policy['alignments'] = {sample[k]: sample[i] for k, i in
-                    (('alignment', 'index'), ('normal_alignment', 'normal_index')) if sample.get(k)}
-                policy_path = out / 'policies' / (sid + '.json')
-                atomic_json(policy_path, policy)
-                sample['_policy_path'] = str(policy_path)
-            checks.append(dict(sample_id=sid, status='ok', seed_count=len(seeds),
-                reference_build=build, reference_identity='declared_build_and_contig_lengths_only',
-                reason='No whole-genome BAM validation performed'))
-            if config['mode'] == 'with_bam':
-                checks[-1].update(source_cnvkit_version=sample.get('source_cnvkit_version'),
-                                  source_cnvkit_origin=sample['source_cnvkit_evidence']['origin'],
-                                  source_cnvkit_issue=sample.get('_source_cnvkit_issue'))
-            record_progress(sample, 'ready')
-        except Exception as exc:
-            checks.append(dict(sample_id=sid, status='failed', reason=str(exc), stage='input_check'))
-            sample['_input_failed'] = str(exc)
-            record_progress(sample, 'input_failed')
+        with measure('input_check', sample_id=sid, version=source) as input_clock:
+            try:
+                build = config.get('reference', {}).get('build', sample['reference_build'])
+                if build != sample['reference_build']:
+                    raise ValueError('Reference build differs between sample and configuration')
+                seeds_path = sample.get('seeds_bed') or sample['source_result'].get('seeds_bed')
+                seeds = read_seed_bed(seeds_path, lengths) if seeds_path else []
+                sample['seeds'] = seeds
+                sample['upstream_seed_ids'] = [s['seed_id'] for s in seeds]
+                if seeds_path:
+                    sample['seeds_bed'] = seeds_path
+                    source_files.append(dict(path=seeds_path, sha256=digest(seeds_path)))
+                specs = [(source, sample['source_result'])] + [(r['version'], r) for r in sample['comparison_results']]
+                for vid, spec in specs:
+                    if check_only:
+                        from .concordance_import import inspect_import_format
+                        entry = entries[vid]
+                        categories = entry.get('supported_labels', entry.get('supported_classes', []))
+                        result = inspect_import_format(spec, categories)
+                        import_checks.append(dict(sample_id=sid, version=vid, **result))
+                    try:
+                        if spec.get('reference_build', sample['reference_build']) != sample['reference_build']:
+                            raise ValueError('Imported result reference_build differs from the sample declaration')
+                        if not Path(spec.get('aa_dir', '')).is_dir() or not Path(spec.get('ac_dir', '')).is_dir():
+                            raise ValueError('Imported AA/AC directory is missing')
+                        if len(list(Path(spec['aa_dir']).glob('*_summary.txt'))) != 1:
+                            raise ValueError('Expected one AA summary for each imported result')
+                        artifact_total = 0
+                        for path, _ in _artifacts(spec.get('aa_dir', ''), spec.get('ac_dir')):
+                            if path.is_symlink() or not path.is_file():
+                                raise ValueError('Only regular small result files can be imported')
+                            artifact_total += path.stat().st_size
+                            if path.stat().st_size > MAX_FILE_BYTES or artifact_total > MAX_TOTAL_BYTES:
+                                raise ValueError('Result artifact size limit exceeded')
+                            source_files.append(dict(path=str(path.resolve()), sha256=digest(path)))
+                        for key in ('seeds_bed', 'stages_json'):
+                            if spec.get(key) and Path(spec[key]).is_file():
+                                source_files.append(dict(path=spec[key], sha256=digest(spec[key])))
+                    except (OSError, ValueError, KeyError) as exc:
+                        if spec is sample['source_result']:
+                            raise
+                        spec['_input_error'] = str(exc)
+                if config['mode'] == 'with_bam':
+                    for key in ('baseline_cns', 'source_seed_bed', 'baseline_provenance'):
+                        if sample.get(key) and Path(sample[key]).is_file():
+                            source_files.append(dict(path=sample[key], sha256=digest(sample[key]), kind=key))
+                    sample['_input_identities'] = _validate_bam(sample, config, lengths)
+                    source_files.extend(sample['_input_identities'])
+                    policy = dict(config.get('io_policy', {}))
+                    policy['alignments'] = {sample[k]: sample[i] for k, i in
+                        (('alignment', 'index'), ('normal_alignment', 'normal_index')) if sample.get(k)}
+                    policy_path = out / 'policies' / (sid + '.json')
+                    atomic_json(policy_path, policy)
+                    sample['_policy_path'] = str(policy_path)
+                checks.append(dict(sample_id=sid, status='ok', seed_count=len(seeds),
+                    reference_build=build, reference_identity='declared_build_and_contig_lengths_only',
+                    reason='No whole-genome BAM validation performed'))
+                if config['mode'] == 'with_bam':
+                    checks[-1].update(source_cnvkit_version=sample.get('source_cnvkit_version'),
+                                      source_cnvkit_origin=sample['source_cnvkit_evidence']['origin'],
+                                      source_cnvkit_issue=sample.get('_source_cnvkit_issue'))
+                record_progress(sample, 'ready')
+            except Exception as exc:
+                checks.append(dict(sample_id=sid, status='failed', reason=str(exc), stage='input_check'))
+                sample['_input_failed'] = str(exc)
+                input_clock.status = 'failed'
+                record_progress(sample, 'input_failed')
     input_identity = _signature(source_files)
     identity_file = out / 'input_identity.json'
     if identity_file.exists() and json.loads(identity_file.read_text())['hash'] != input_identity:
@@ -702,7 +551,8 @@ def _run_locked(config, lock, entries, out, check_only):
                 r.update(analysis_kind='aa_ac', source_version=source, comparison_eligible=False)
                 downstream.append(r)
             if config['mode'] == 'with_bam':
-                local_cnv_records.extend(run_local_cnv_comparators(sample, config, entries, runtimes, verified, [], out))
+                local_cnv_records.extend(timed_call('local_cnv_comparators', run_local_cnv_comparators,
+                    sample, config, entries, runtimes, verified, [], out, timing=dict(sample_id=sid)))
             record_progress(sample, 'input_failed')
             atomic_json(out / 'local_cnv_comparator_records.json', local_cnv_records)
             atomic_json(out / 'downstream_records.json', downstream)
@@ -733,7 +583,9 @@ def _run_locked(config, lock, entries, out, check_only):
             job = out / 'imports' / sid / vid
             # Imports are small and read afresh on resume to validate provenance.
             dest = _new_attempt(job, create=False)
-            r = import_result(spec, sid, vid, dest, entry.get('supported_labels', entry.get('supported_classes', [])), lengths)
+            r = timed_call('result_import', import_result, spec, sid, vid, dest,
+                entry.get('supported_labels', entry.get('supported_classes', [])), lengths,
+                timing=dict(sample_id=sid, version=vid))
             r.update(source_version=source, analysis_kind='aa_ac',
                      component_identity_level=spec['component_identity_level'],
                      reference_scope='declared_reference_' + sample['reference_build'])
@@ -759,7 +611,8 @@ def _run_locked(config, lock, entries, out, check_only):
                     r = empty_record(sid, '__whole_result__', vid, 'missing', 'ac', 'No configured AC runtime')
                     r.update(analysis_kind='ac_only', comparison_eligible=False)
                 else:
-                    r = reclassify_cached(baseline, runtimes[vid], entries[vid], config, out / 'reclassifications' / sid / vid)
+                    r = timed_call('ac_reclassification', reclassify_cached, baseline, runtimes[vid], entries[vid],
+                        config, out / 'reclassifications' / sid / vid, timing=dict(sample_id=sid, version=vid))
                 r.update(source_version=source, seed_id='__whole_result__', source_aa_version=baseline.get('source_aa_version'))
                 r['reference_scope'] = baseline.get('reference_scope', 'declared_reference_' + sample['reference_build'])
                 downstream.append(r)
@@ -769,6 +622,7 @@ def _run_locked(config, lock, entries, out, check_only):
             local_config = dict(config)
             local_config['_io_policy_path'] = sample['_policy_path']
             local_config['_cnv_cache_dir'] = str(out / 'cnv_cache')
+            local_config['_component_cache_dir'] = str(out / '.component_cache')
             native_source_rows = []
             for vid in versions:
                 print(f'  {sid} / {vid}: local upstream and selected-seed downstream', flush=True)
@@ -777,7 +631,8 @@ def _run_locked(config, lock, entries, out, check_only):
                     if vid not in verified:
                         env = dict(os.environ, AA_DATA_REPO=config['reference']['aa_data_repo'], PYTHONDONTWRITEBYTECODE='1')
                         try:
-                            verified[vid] = verify_runtime(runtime, entry, env)
+                            verified[vid] = timed_call('runtime_check', verify_runtime, runtime, entry, env,
+                                timing=dict(sample_id=sid, version=vid))
                         except Exception as exc:
                             verified[vid] = dict(ready=False, diagnostics=[str(exc)], id=vid)
                         atomic_json(out / 'runtime_check.json', verified)
@@ -797,8 +652,15 @@ def _run_locked(config, lock, entries, out, check_only):
                                 status='unsupported', reason='AA seed-filter source/runtime could not be verified',
                                 comparison_eligible=False, calibration_status='unverified', cnvkit_version=runtime.get('cnvkit_version')))
                     if chosen:
-                        joint = run_bounded_downstream(sample, chosen, runtime, entry, verified[vid], local_config,
-                                                       out / 'downstream_jobs' / sid / vid, measurement)
+                        joint = timed_call('selected_seed_downstream', run_bounded_downstream,
+                            sample, chosen, runtime, entry, verified[vid], local_config,
+                            out / 'downstream_jobs' / sid / vid, measurement,
+                            timing=dict(sample_id=sid, version=vid))
+                        aa_cache = joint.get('component_cache', {}).get('aa', {})
+                        if joint.get('run_dir'):
+                            record_native_aa(joint['run_dir'], sid, vid,
+                                role='producer_reference' if aa_cache.get('hit') else 'current_execution',
+                                producer_id=aa_cache.get('producer_run_dir', ''))
                         if vid == source:
                             bridge = _bridge(baseline, joint, chosen)
                             sample['source_bridge_status'] = 'passed' if bridge and all(r['passed'] for r in bridge) else 'failed'
@@ -820,8 +682,9 @@ def _run_locked(config, lock, entries, out, check_only):
                         r = empty_record(sid, seed['seed_id'], vid, 'missing', 'aa', 'No configured AA+AC runtime')
                         r.update(analysis_kind='aa_ac', source_version=source, comparison_eligible=False)
                         downstream.append(r)
-            local_cnv_records.extend(run_local_cnv_comparators(
-                sample, local_config, entries, runtimes, verified, native_source_rows, out))
+            local_cnv_records.extend(timed_call('local_cnv_comparators', run_local_cnv_comparators,
+                sample, local_config, entries, runtimes, verified, native_source_rows, out,
+                timing=dict(sample_id=sid)))
         atomic_json(out / 'local_cnv_comparator_records.json', local_cnv_records)
         atomic_json(out / 'downstream_records.json', downstream)
         atomic_json(out / 'upstream_records.json', upstream)
@@ -833,7 +696,8 @@ def _run_locked(config, lock, entries, out, check_only):
         reference_version=FIXED_REFERENCE, mode=config['mode'], manifest_hash=run_identity,
         whole_genome_bam_operations='prohibited', **s) for s in source_files])
     atomic_json(out / 'local_cnv_comparator_records.json', local_cnv_records)
-    summary = write_concordance_reports(out, downstream, upstream, config, local_cnv_records=local_cnv_records)
+    summary = timed_call('report_generation', write_concordance_reports, out, downstream, upstream,
+        config, local_cnv_records=local_cnv_records)
     atomic_json(out / 'report_inputs.sha256.json', {name: digest(out / name) for name in
         ('downstream_records.json', 'upstream_records.json', 'config.resolved.json', 'local_cnv_comparator_records.json')})
     return summary
@@ -890,10 +754,10 @@ def main(argv=None):
             source = Path(args.from_run).resolve() if args.from_run else out
             original = json.loads((source / 'provenance.json').read_text())
             run_version = original.get('program_version')
-            if run_version not in {PROGRAM_VERSION, '0.4.1', '0.4.0', '0.3.0', '0.3.1', '0.3.2'}:
+            if run_version not in {PROGRAM_VERSION, '0.4.2', '0.4.1', '0.4.0', '0.3.0', '0.3.1', '0.3.2'}:
                 raise ValueError('Use the original program version to redraw this report, or run the manifest into a new output directory')
             names = ('downstream_records.json', 'upstream_records.json', 'config.resolved.json')
-            if run_version == PROGRAM_VERSION:
+            if run_version in {PROGRAM_VERSION, '0.4.2'}:
                 names += ('local_cnv_comparator_records.json',)
             expected = json.loads((source / 'report_inputs.sha256.json').read_text())
             if set(expected) != set(names):

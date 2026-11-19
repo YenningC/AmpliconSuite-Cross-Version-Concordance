@@ -15,6 +15,7 @@ import re
 import shutil
 
 from .common import atomic_json, digest, now
+from .concordance_timing import measure, timed_call
 from .full_suite import WHOLE_SAMPLE, private_reference, audit_reference, read_seed_bed
 from .parsing import (LABELS, OutputError, _amplicon_files, _associate_beds, _profile_labels,
                       _profile_rows, _summary_count, aa_amplicon_count, parse_run)
@@ -417,7 +418,7 @@ def reclassify_result(source_record, runtime, entry, config, destination):
             raise error('Inherited AA reconstruction is incomplete/invalid: '+pre.get('reason',''))
         stage='ac';inputfile=prepare_ac_input(out);env=_ac_environment(runtime)
         env.update(AA_DATA_REPO=str(private_reference(reference['aa_data_repo'],out/'reference')),MPLCONFIGDIR=str(out/'mplcache'))
-        verified=_verify_ac_runtime(runtime,entry,env);support=verified['supported_labels']
+        verified=timed_call('ac_runtime_check',_verify_ac_runtime,runtime,entry,env);support=verified['supported_labels']
         common['ac_runtime_verified']=True
         common['provenance_kind']='verified_ac_on_inherited_aa'
         atomic_json(out/'runtime_check.json',verified)
@@ -429,7 +430,9 @@ def reclassify_result(source_record, runtime, entry, config, destination):
         atomic_json(out/'execution.json',{'created_utc':now(),'argv':command,'analysis_kind':'ac_only','parameters':parameters,
             'source_aa_version':source_aa,'source_graph_identity':_aa_identity(out)[1],'AA_was_not_rerun':True})
         common['ac_executed']=True
-        rc=execute(command,out,env,out/'ac.log',timeout=config.get('job_timeout_seconds'))
+        with measure('ac',measurement_kind='subprocess',sample_id=sample,version=version,log_path=out/'ac.log') as clock:
+            rc=execute(command,out,env,out/'ac.log',timeout=config.get('job_timeout_seconds'))
+            clock.status='complete' if rc==0 else 'failed'
         audit_reference(out)
         if rc:raise RuntimeError(f'AC exited {rc}; inspect ac.log')
         log=(out/'ac.log').read_text(errors='replace')
@@ -561,7 +564,7 @@ def reclassify_cached(source_record,runtime,entry,config,job_dir):
         env=_ac_environment(runtime)
         env.update(AA_DATA_REPO=str(Path(reference['aa_data_repo']).resolve()),MPLCONFIGDIR=str(job/'probe_mplcache'))
         # Required on every invocation, including a prospective cache hit.
-        verified=_verify_ac_runtime(runtime,entry,env)
+        verified=timed_call('ac_runtime_check',_verify_ac_runtime,runtime,entry,env)
         hashes=_source_aa_hashes(source_record);graph_identity=_stable_hash(hashes)
         source_metadata=_source_metadata(source_record,graph_identity)
         if source_record.get('reference_build') and source_record['reference_build']!=reference['build']:

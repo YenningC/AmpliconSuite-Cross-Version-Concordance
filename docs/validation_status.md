@@ -1,5 +1,22 @@
 # Validation status
 
+## 0.4.3 AA execution and output controls
+
+We used the public `with_bam` CLI on an artificial tumor/normal pair with a 110 kb amplified candidate. The control used the complete eleven-recipe panel and fixed reference Suite 1.6.2. For each recipe the released 0.4.2 workflow ran its own AA in FULL/EXPLORE and its own AC. The 0.4.3 workflow used CYCLES/EXPLORE and the same seeds, filters, thresholds and resource limits. Native CNVkit, AA and AC were executed locally. This control has one Linear feature.
+
+- The AA breakpoint graphs, cycles, summaries, AC classification profiles and feature BED files matched byte for byte for all eleven recipes. The comparison retained all eleven Suite records. Suite 1.3.3 and 1.3.4 shared one verified AA 1.4.r2 reconstruction and ran their distinct AC versions. This reduced the eleven AA executions to ten on this control.
+- The six Concordance report PNGs matched byte for byte. Five named result tables also matched byte for byte. The local CNVkit seed table preserved all cells after making the two provenance paths relative to their respective run directories. [Machine-readable comparison](validation/aa_optimization.synthetic.json)
+- A second artificial BAM contained two amplicons. With native AA 1.4.r2 and 1.6.r2, graph/cycles files from FULL and CYCLES matched at both amplicons. Holding AC 2.0.1 fixed for this mode comparison, the classification profiles and BEDs matched for a cyclic ecDNA-positive amplicon and a Linear amplicon. Both AA revisions matched with downsampling disabled, with requested depth 10 (all reads retained on the low-depth fixture), and with requested depth 0.25 (roughly half the reads retained). [Two-amplicon measurements](validation/aa_two_amplicons.synthetic.json)
+- A separate synthetic run lowered the unique-access cap to 1,000,000 bp. Both tested recipes (Suite 1.6.1 and 1.6.2) reported AA failure, recorded the rejected request, skipped AC and produced no successful AA cache entry. The configured 100 Mb patient-run limit and performance on patient structural variation require a separate run.
+
+All 355 local regression tests passed with the optional native CNVkit 0.9.13 integration enabled. Tests include AC-only retry, changed parameters and inputs, corrupted artifacts, partial multi-amplicon output, missing dependency inventories, resumed timing and failed access budgets.
+
+To reproduce the comparison, use two independent output directories for the same positive synthetic manifest. Run the baseline with the 0.4.2 CLI, the optimized run with 0.4.3, then run the following against the completed directories. The verifier checks the named scientific artifacts and report figures and returns an error on a difference. [Artificial BAM fixture instructions](local_cnv_calibration.md#synthetic-control-fixture)
+
+```sh
+python scripts/check_aa_optimization_control.py runs/full-0.4.2 runs/cycles-0.4.3
+```
+
 ## 0.4.2 local CNVkit version controls
 
 The source-matched comparison was exercised with an artificial tumor and matched normal, one 110 kb candidate and a measured background of 800 kb. CNVkit 0.9.14 supplied the local standard. Native CNVkit 0.9.10, 0.9.13 and 0.9.14 ran with the same source Suite 1.6.1 / AA 1.6.r1 seed filter. Each version retained the full candidate. Both cross-version comparisons yielded interval Jaccard 1 and retention difference 0. The original-candidate calibration remained unverified because the fixture had no original-run identity evidence. This validates the positive software path on one artificial case. [Synthetic control results](validation/local_cnv_versions.synthetic.json)

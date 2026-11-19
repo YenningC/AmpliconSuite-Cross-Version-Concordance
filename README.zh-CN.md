@@ -4,9 +4,19 @@
 
 **以有限计算比较不同版本的扩增结果，输出逐样本天梯图和有明确证据边界的兼容性报告。**
 
-版本 **0.4.2**。固定参考为 **Suite 1.6.2 / AA 1.6.r2 / AC 2.0.1**，不会随上游更新自动改变。本项目是独立开发的本地科研工具，不属于官方AmpliconSuite组件。
+版本 **0.4.3**。固定参考为 **Suite 1.6.2 / AA 1.6.r2 / AC 2.0.1**，不会随上游更新自动改变。本项目是独立开发的本地科研工具，不属于官方AmpliconSuite组件。
 
 > 相似度只描述已观察到的软件输出，不是生物学真实性概率，也不证明完整流程可互换。允许差异未预设、样本不足或证据不完整时，结论保留为“证据不足”。
+
+## 固定种子的 AA 重建提速（0.4.3）
+
+`with_bam` 默认使用 AA 的 `CYCLES` 和 `EXPLORE`，输出断点图数据、环和摘要，供各版 AC 分类以及生成样本和队列报告。需要额外的 AA 原生结构变异图时，在清单中设置 `"aa_parameters": {"runmode": "FULL", "downsample": -1}`，将示例的下采样值换为本次比较原定值。
+
+同一 AA 提交、有效运行环境、种子、BAM、参考、背景统计、参数和读取限制均匹配时，多套 Suite 可共用一次 AA 重建。各套 Suite 使用配套 AC。逐版本执行记录可追溯复用来源，`stage_timing.tsv` 提供各阶段计时和缓存命中情况。超过区段访问预算时，报告保留失败状态和日志。
+
+查看 `stage_timing.tsv` 时，以同一个 `invocation_id` 为一次运行。`accounting=invocation_total` 是整次耗时；筛选 `measurement_kind=subprocess` 可查看 AA、AC 及局部 CNVkit 等实际调用。AA 原生日志中的部分阶段会重叠，`producer_reference` 引用以前运行的耗时。这两类行都不应累加到本次总耗时。
+
+升级时选用新输出目录。第一次运行用来测量冷启动耗时，原命令可用于中断续跑。若只调整 AC 参数，在新清单顶层填入 `reuse_aa_from` 指向之前 0.4.3 的运行目录，并使用新输出目录。将新运行的分阶段耗时、每版返回状态与旧记录配对比较。
 
 ## 以原 CNVkit 版本为局部对照（0.4.2）
 
@@ -16,10 +26,10 @@
 
 打开 `result.md`，同时看**标准和目标各自保留多少原候选**，以及两者在原候选内的种子区段 Jaccard。两个版本可以彼此很像，同时各自仅保留少量原候选。`local_cnv_comparator_samples.tsv` 给出可配对数、目标额外保留数、遗漏数和保留率差；整组表给出按患者或独立样本汇总的描述性区间。运行失败、来源未知、双方均无区段信号分别显示。原生 Suite 配方比较沿用固定参考 Suite 1.6.2，正式兼容判定及原候选再保留校准另有证据要求。
 
-下游的原始 AA 区段、AC 分类区段和完整/共同类别标签一致率见 `result.tsv`。可从完整性校验通过的 0.4.2 或已支持的 0.3.0～0.4.1 旧记录重绘报告。旧记录只呈现已保存的指标，新对照标记为 `not_recorded_in_run`；获得实测值需用新目录运行 `with_bam`。
+下游的原始 AA 区段、AC 分类区段和完整/共同类别标签一致率见 `result.tsv`。可从完整性校验通过的 0.4.3、0.4.2 或已支持的 0.3.0～0.4.1 旧记录重绘报告。旧记录只呈现已保存的指标，新对照标记为 `not_recorded_in_run`；获得实测值需用新目录运行 `with_bam`。
 
 ```sh
-asconcordance report --from-run runs/comparison --out reports/comparison-0.4.2
+asconcordance report --from-run runs/comparison --out reports/comparison-0.4.3
 ```
 
 [来源复现和参数对照步骤](docs/source_reproduction.md)
@@ -160,6 +170,7 @@ asconcordance run --manifest batch.manifest.json --out runs/batch01
 
 | 版本 | 主要变化 |
 |---|---|
+| 0.4.3 | 新增分阶段计时，默认用 CYCLES 重建。AA 与 AC 分开缓存，匹配同一 AA 提交和有效输入的 Suite 共用一次重建。 |
 | 0.4.2 | 以样本原用的 CNVkit 版本作局部对照，报告种子保留、新增、遗漏和区段重叠。Linux 镜像加入 CNVkit 0.9.14。 |
 | 0.4.1 | 新增逐样本结果摘要，列出种子保留比例、AA 与 AC 的区段相似度和标签一致率。符合条件的旧版 AA 可复用已核验的背景统计。 |
 | 0.4.0 | 支持用 TSV 样本表批量导入。新增逐样本报告索引、整组兼容性图和进度记录。 |
@@ -172,6 +183,8 @@ asconcordance run --manifest batch.manifest.json --out runs/batch01
 0.1.0 和 0.4.1 为本地开发版本。
 
 ## 验证状态
+
+0.4.3 在人工阳性 BAM 上用原生 AA、AC 完成了全部 11 个 Suite 配方对照。与旧流程逐版比较，断点图数据、环、摘要、分类和特征区段文件逐字节相同。相同条件下共用 AA 后，实际重建由 11 次减至 10 次。[对照记录](docs/validation_status.md)
 
 0.4.2 在本机通过全部 311 项回归。另在一对人工肿瘤和正常 BAM 上固定来源 AA 1.6.r1，以局部 CNVkit 0.9.14 为标准，实际比较了 0.9.10 和 0.9.13。四个历史版本的原生 AA 合成对照及其范围见 [验证记录](docs/validation_status.md)。
 

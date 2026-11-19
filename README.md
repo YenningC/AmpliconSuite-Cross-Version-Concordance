@@ -6,9 +6,19 @@
 
 AmpliconSuite Cross-Version Concordance is an independent, local research tool. It compares existing AmpliconSuite outputs, orchestrates selected-seed AA/AC runs, and evaluates whether known candidate seeds remain selected after local CNVkit reassessment. It produces per-sample similarity ladders, paired difference tables and compatibility reports.
 
-**Version:** 0.4.2 · **Fixed reference:** Suite **1.6.2**, AA **1.6.r2**, AC **2.0.1**. The reference is frozen; installing a newer upstream release does not change it. This project is not an official AmpliconSuite component.
+**Version:** 0.4.3 · **Fixed reference:** Suite **1.6.2**, AA **1.6.r2**, AC **2.0.1**. The reference is frozen; installing a newer upstream release does not change it. This project is not an official AmpliconSuite component.
 
 > Similarity describes observed software outputs. It is not a probability of biological truth or proof that complete workflows are interchangeable. Compatibility remains **insufficient evidence** when margins are unspecified or evidence is inadequate.
+
+## Faster fixed-seed reconstruction (0.4.3)
+
+The default `with_bam` run uses AA's `CYCLES` mode with `EXPLORE`. It writes the graph, cycles and summary for classification and report generation. To also generate native AA SV figures, set `aa_parameters.runmode` to `FULL`.
+
+Matching AA reconstructions can serve multiple Suite recipes. Reuse requires the same verified AA commit, inputs, effective parameters, runtime, background and access policy. Each Suite uses its configured classifier. The per-Suite attempt records identify the producer of reused results. Use `stage_timing.tsv` for timing and cache activity. The fixed reference, seed selection, per-sample figures and cohort endpoints retain their existing definitions.
+
+Each `invocation_id` in `stage_timing.tsv` identifies one invocation. Read its elapsed time from the `invocation_total` row. Filter `measurement_kind=subprocess` for actual AA, AC and local CNVkit subprocess times. Native AA diagnostics can overlap. Rows marked `producer_reference` give historical timing for a reused artifact. Count the invocation total once.
+
+Start in a fresh output directory when upgrading. The first run measures cold performance. Repeat the same command to resume. To change AC parameters, choose a new output directory and optionally set the manifest field `reuse_aa_from` to a prior 0.4.3 run directory. Keep the previous output available until the new run is complete. A budget failure remains visible for any AA job that exceeds the bounded access policy.
 
 ## Sample results and source-matched CNVkit controls (0.4.2)
 
@@ -18,10 +28,10 @@ The original Suite result directory can supply the version via a single `*_run_m
 
 Open `result.md`. Read the retained/evaluable counts for the standard and target alongside their **paired interval Jaccard** within original candidate regions. A high Jaccard can coexist with low retention of original candidates. `local_cnv_comparator_samples.tsv` gives paired counts, gains, losses and target-minus-standard retention change. Its cohort counterpart includes pointwise descriptive intervals with patient grouping when declared. A missing runtime, unknown source version or pair with no interval signal is explicitly identified. The Suite panel keeps its fixed reference and evaluates its own native CNVkit and AA combinations. Conditional Suite compatibility and the original-run retention check have separate evidence requirements.
 
-Downstream AA and AC interval Jaccards and full/shared class label agreement are in `result.tsv`. Generate a report in a fresh directory from verified 0.4.2 records or earlier 0.3.0–0.4.1 supported releases. Report replay reads saved results only. Older runs display `not_recorded_in_run` for the new local control. To measure it, start a new bounded `with_bam` run.
+Downstream AA and AC interval Jaccards and full/shared class label agreement are in `result.tsv`. Generate a report in a fresh directory from verified 0.4.3 or 0.4.2 records or earlier 0.3.0–0.4.1 supported releases. Report replay reads saved results only. Older runs display `not_recorded_in_run` for the new local control. To measure it, start a new bounded `with_bam` run.
 
 ```sh
-asconcordance report --from-run runs/comparison --out reports/comparison-0.4.2
+asconcordance report --from-run runs/comparison --out reports/comparison-0.4.3
 ```
 
 [Source replay and local CNV calibration protocol](docs/source_reproduction.md)
@@ -190,6 +200,7 @@ Repeat the same `run` command to resume. Successful caches are checked against r
 
 | Version | Main changes |
 |---|---|
+| 0.4.3 | Time bounded stages, use CYCLES for reconstruction, cache AA and AC separately and share verified identical AA jobs across Suite recipes. |
 | 0.4.2 | Use the sample’s original CNVkit version as the local baseline. Report seed retention, gains, losses and interval overlap. Bundle CNVkit 0.9.14 in the Linux image. |
 | 0.4.1 | Add per-sample result summaries for seed retention, AA and AC interval overlap, and label agreement. Reuse verified background statistics for eligible older AA versions. |
 | 0.4.0 | Import batches from a TSV sample sheet. Add an index of sample reports, cohort compatibility plots and progress tracking. |
@@ -202,6 +213,8 @@ Repeat the same `run` command to resume. Successful caches are checked against r
 0.1.0 and 0.4.1 were local development milestones.
 
 ## Validation status
+
+The 0.4.3 public `with_bam` test used native AA and AC for all eleven Suite recipes on an artificial positive BAM. The FULL and CYCLES runs produced identical graph, cycles, summary, classification and feature BED files for every recipe. Reusing matching AA reduced the number of reconstructions from eleven to ten. [Validation record](docs/validation_status.md)
 
 Local 0.4.2 regression passed all 311 tests. A separate integration run used native CNVkit 0.9.14 as the local standard for 0.9.10 and 0.9.13, with the same native AA 1.6.r1 seed filter on an artificial tumor and matched normal. See [validation status](docs/validation_status.md) for the four historical native AA controls.
 
