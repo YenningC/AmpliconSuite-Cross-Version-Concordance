@@ -15,7 +15,22 @@ def build(manifest, prepared, templates, cnv_runtimes, lock):
     template_map = {t['id']: t for t in templates}
     reference = template_map.get(lock['reference_version'])
     old_bfb = template_map.get('suite-1.6.1') or template_map.get('suite-1.6.0')
-    cnv = {r['version']: r for r in cnv_runtimes}
+    cnv = {}
+    for record in cnv_runtimes:
+        version = record['version']
+        if version in cnv:
+            raise ValueError('Duplicate CNVkit runtime for ' + version)
+        cnv[version] = record
+    if result['mode'] == 'with_bam':
+        # Keep exact input-version environments even if no Suite recipe uses them.
+        registry = {row['version']: copy.deepcopy(row) for row in result.get('cnvkit_runtimes', [])}
+        if len(registry) != len(result.get('cnvkit_runtimes', [])):
+            raise ValueError('Duplicate CNVkit runtime in input manifest')
+        for version, row in cnv.items():
+            if version in registry and registry[version] != row:
+                raise ValueError('Conflicting CNVkit runtime for ' + version)
+            registry[version] = copy.deepcopy(row)
+        result['cnvkit_runtimes'] = list(registry.values())
     recipes = load_builtin_map()['versions']
     if prepared['reference_version'] != lock['reference_version']:
         raise ValueError('Prepared source reference differs from the fixed lock')
@@ -34,9 +49,13 @@ def build(manifest, prepared, templates, cnv_runtimes, lock):
         runtime['solver'] = 'clarabel' if entry['aa']['version'].startswith('1.6.') else 'mosek'
         if result['mode'] == 'with_bam':
             ck = recipes[vid]['cnvkit_version']
-            if ck not in cnv:
+            if ck not in registry:
                 raise ValueError('Missing exact CNVkit runtime ' + ck + '; no latest-version fallback')
-            runtime.update(cnvkit_python=cnv[ck]['python'], cnvkit_script=cnv[ck]['script'], cnvkit_version=ck)
+            cnv_runtime = registry[ck]
+            runtime.update(cnvkit_python=cnv_runtime['python'], cnvkit_script=cnv_runtime['script'], cnvkit_version=ck)
+            for key in ('env', 'extra_path'):
+                if key in cnv_runtime:
+                    runtime['cnvkit_' + key] = copy.deepcopy(cnv_runtime[key])
         runtimes.append(runtime)
     result.update(reference_version=lock['reference_version'], target_versions=requested, runtimes=runtimes)
     return result

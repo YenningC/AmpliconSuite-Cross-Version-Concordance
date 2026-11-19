@@ -129,6 +129,82 @@ print('BFBArchitect SYNTHETIC integration enabled')
         corrected=self.run_downstream();self.assertEqual(corrected['labels'],['ecDNA'])
         self.assertEqual(corrected['intervals'],record['intervals']);self.assertEqual(self.trace(),['AA','AC'])
 
+    def test_hash_subsampling_is_reproducible_and_cache_uses_effective_seed(self):
+        self.aa.write_text(self.aa.read_text()+"\nprint('effective hash seed', os.environ['PYTHONHASHSEED'])\n")
+        with patch.dict('os.environ', {}, clear=False):
+            import os
+            os.environ.pop('PYTHONHASHSEED', None)
+            for key in ('0', '124', 'random'):
+                if key!='0':
+                    self.runtime['env']['PYTHONHASHSEED']=key
+                record=self.run_downstream('hash_seed')
+                attempt=Path(record['run_dir'])
+                if key=='random':
+                    self.assertEqual(record['status'],'failed')
+                    self.assertIn('numeric PYTHONHASHSEED',record['reason'])
+                else:
+                    self.assertEqual(record['status'],'ok')
+                    self.assertIn('effective hash seed '+key,(attempt/'aa.log').read_text())
+                    self.assertEqual(json.loads((attempt/'aa_background.json').read_text())['python_hash_seed'],key)
+        self.assertEqual(self.trace(),['AA','AC','AA','AC'])
+
+    def test_native_stats_avoid_duplicate_background_queries_under_same_cap(self):
+        # Synthetic caller models one new background and one connected-region
+        # fetch. The producer already measured background in its guarded stage.
+        self.aa.write_text("""import os, pathlib, sys, pysam
+args=sys.argv
+bam=pysam.AlignmentFile(args[args.index('--bam')+1], 'rb')
+cache=pathlib.Path(os.environ['AA_DATA_REPO'])/'coverage.stats'
+if '--no_cstats' in args:
+    list(bam.fetch('chr2',1000,1500))
+else:
+    assert cache.read_text().split()[0] == bam.filename.decode()
+    print('Reusing cstats from ' + str(cache))
+list(bam.fetch('chr1',1000,1500))
+prefix=pathlib.Path(args[args.index('--out')+1])
+pathlib.Path(str(prefix)+'_summary.txt').write_text('#Amplicons = 0\\n')
+""")
+        policy=json.loads(self.policy.read_text())
+        policy['max_unique_bp']=600
+        atomic_json(self.policy,policy)
+        cold=self.run_downstream('measure')
+        self.assertEqual(cold['status'],'failed')
+        stages=json.loads((Path(cold['run_dir'])/'stages.json').read_text())
+        self.assertNotEqual(stages['aa']['returncode'],0)
+        audit=json.loads(next(Path(cold['run_dir']).glob('bam_access.*.json')).read_text())
+        self.assertEqual(audit['first_rejected_unique_request']['new_unique_bp'],500)
+        spaced=self.root/'SYNTHETIC tumor.bam'
+        self.bam.rename(spaced)
+        Path(str(self.bam)+'.bai').rename(str(spaced)+'.bai')
+        self.sample['alignment']=str(spaced)
+        policy['alignments']={str(spaced):str(spaced)+'.bai'}
+        atomic_json(self.policy,policy)
+        fields=['20','20','3','20','20','5','150','330','25','255','405','3','0.95','3',str(spaced.stat().st_size)]
+        stats=self.root/'producer.stats'
+        stats.write_text('\t'.join([str(spaced), *fields])+'\n')
+        measurement=dict(mode='same_version_seed_stage', fields=fields, path=str(stats), sha256=digest(stats))
+        record=run_bounded_downstream(self.sample,self.seeds,self.runtime,self.entry,self.verified,
+                                      self.config,self.root/'reuse',measurement)
+        self.assertEqual(record['status'],'not_detected',record.get('reason'))
+        attempt=Path(record['run_dir'])
+        self.assertFalse((attempt/'coverage_input.bam').is_symlink())
+        self.assertTrue(json.loads((attempt/'aa_background.json').read_text())['reuse_confirmed'])
+        audit=json.loads(next(attempt.glob('bam_access.*.json')).read_text())
+        self.assertEqual((audit['unique_requested_bp'],audit['effective_max_unique_bp']),(500,600))
+        # The old private alias is gone. Successful cache rereads verified result files.
+        cached=run_bounded_downstream(self.sample,self.seeds,self.runtime,self.entry,self.verified,
+                                      self.config,self.root/'reuse',measurement)
+        self.assertEqual(cached['run_dir'], record['run_dir'])
+        spaced_out=run_bounded_downstream(self.sample,self.seeds,self.runtime,self.entry,self.verified,
+                                          self.config,self.root/'spaced output',measurement)
+        fallback=json.loads((Path(spaced_out['run_dir'])/'aa_background.json').read_text())
+        self.assertEqual(fallback['mode'],'native_measurement')
+        self.assertIn('whitespace',fallback['reason'])
+        self.aa.write_text(self.aa.read_text().replace('Reusing cstats from ', 'Did not confirm '))
+        unconfirmed=run_bounded_downstream(self.sample,self.seeds,self.runtime,self.entry,self.verified,
+                                           self.config,self.root/'unconfirmed',measurement)
+        self.assertEqual(unconfirmed['status'],'failed')
+
     def test_truncated_graph_creates_new_attempt_and_does_not_reuse_cache(self):
         first=self.run_downstream();graph=next((Path(first['run_dir'])/'aa').glob('*_graph.txt'));graph.write_text('')
         second=self.run_downstream();self.assertEqual(second['status'],'ok')

@@ -4,9 +4,25 @@
 
 **以有限计算比较不同版本的扩增结果，输出逐样本天梯图和有明确证据边界的兼容性报告。**
 
-版本 **0.4.0**。固定参考为 **Suite 1.6.2 / AA 1.6.r2 / AC 2.0.1**，不会随上游更新自动改变。本项目是独立开发的本地科研工具，不属于官方AmpliconSuite组件。
+版本 **0.4.2**。固定参考为 **Suite 1.6.2 / AA 1.6.r2 / AC 2.0.1**，不会随上游更新自动改变。本项目是独立开发的本地科研工具，不属于官方AmpliconSuite组件。
 
 > 相似度只描述已观察到的软件输出，不是生物学真实性概率，也不证明完整流程可互换。允许差异未预设、样本不足或证据不完整时，结论保留为“证据不足”。
+
+## 以原 CNVkit 版本为局部对照（0.4.2）
+
+每个 `with_bam` 样本使用**生成该输入时的 CNVkit 版本**作为局部标准。例如原来用 0.9.14，则先局部运行 0.9.14，再与各目标 CNVkit 比较。双方使用相同的 BAM、正常参考策略、候选、侧翼、背景、分箱和分段设置，种子筛选统一使用**来源 Suite 的 AA 筛种器**。多套 Suite 共用一个目标 CNVkit 时，按一个版本比较。
+
+来源结果目录中的单份 `*_run_metadata.json` 可提供原 CNVkit 执行命令和版本，也可在样本清单或 TSV 填写精确的 `source_cnvkit_version`。声明与原始执行记录冲突时显示来源不可用。如果所需环境不在已配置的 Suite 环境中，把解释器与脚本路径登记到共享 `cnvkit_runtimes`。额外目标通过可选的 `local_cnv.comparison_versions` 指定。[配置示例及校准方法](docs/local_cnv_calibration.md)
+
+打开 `result.md`，同时看**标准和目标各自保留多少原候选**，以及两者在原候选内的种子区段 Jaccard。两个版本可以彼此很像，同时各自仅保留少量原候选。`local_cnv_comparator_samples.tsv` 给出可配对数、目标额外保留数、遗漏数和保留率差；整组表给出按患者或独立样本汇总的描述性区间。运行失败、来源未知、双方均无区段信号分别显示。原生 Suite 配方比较沿用固定参考 Suite 1.6.2，正式兼容判定及原候选再保留校准另有证据要求。
+
+下游的原始 AA 区段、AC 分类区段和完整/共同类别标签一致率见 `result.tsv`。可从完整性校验通过的 0.4.2 或已支持的 0.3.0～0.4.1 旧记录重绘报告。旧记录只呈现已保存的指标，新对照标记为 `not_recorded_in_run`；获得实测值需用新目录运行 `with_bam`。
+
+```sh
+asconcordance report --from-run runs/comparison --out reports/comparison-0.4.2
+```
+
+[来源复现和参数对照步骤](docs/source_reproduction.md)
 
 ## 两种输入方式
 
@@ -54,7 +70,7 @@ asconcordance report --out runs/comparison
 
 相对路径以清单文件所在目录为准。原文件只读，输出必须与输入/参考目录分开。可显式指定 `aa_dir`、`ac_dir`，也支持规范化 `run_dir` 或可识别的Suite `result_dir`；目录有歧义时不猜测。尽量保留graph、cycles、summary、分类profile与feature BED，只有图片或分类标签不足以完成比较。
 
-`check` 检查清单、坐标、BAM 头、现成索引和小型结果文件格式。`import_format_check.tsv` 显示每份导入的表头、文件计数以及匹配问题。`run`另核验真实组件版本和源码，缺环境/失败不替换为最新版。`report` 重绘同程序版本的完整性已核验结果。0.4.0 可以重绘通过完整性校验的 0.3.0、0.3.1 和 0.3.2 报告，不重跑算法。升级后的计算请使用新输出目录。报告成功生成不等于所有科学计算成功，须同时查看运行覆盖率和异常记录。
+`check` 检查清单、坐标、BAM 头、现成索引和小型结果文件格式。`import_format_check.tsv` 显示每份导入的表头、文件计数以及匹配问题。`run`另核验真实组件版本和源码，缺环境/失败不替换为最新版。`report` 重绘同程序版本的完整性已核验结果。升级后的计算请使用新输出目录。报告成功生成不等于所有科学计算成功，须同时查看运行覆盖率和异常记录。
 
 [服务器步骤](docs/server_quickstart.md)说明多版本配置；[依赖说明](docs/environment_setup.md)说明历史环境；[局部CNV校准](docs/local_cnv_calibration.md)说明原始来源证据要求。
 
@@ -97,7 +113,7 @@ asconcordance run --manifest batch.manifest.json --out runs/batch01
 
 内置Suite **1.2.2、1.3.3、1.3.4、1.3.7、1.4.0、1.5.0、1.5.2、1.5.3、1.6.0、1.6.1、1.6.2**。组件表见[英文首页](README.md#locked-component-panel)，来源和限制见[版本证据](docs/version_evidence.md)。
 
-1.5.2 及以前的七版容器配方使用 CNVkit 0.9.10，1.5.3 和三个 1.6.x 版本使用 0.9.13。源码commit、归档和文件清单摘要固定保存，实际环境另核验；镜像名称或Suite标签本身不能证明组件身份。0.9.14只可作为明确标记的受控条件。历史AA需要适当Mosek安装与许可证，源码可下载或能启动不等于真实样本已验证。
+1.5.2 及以前的七版容器配方使用 CNVkit 0.9.10，1.5.3 和三个 1.6.x 版本使用 0.9.13。源码commit、归档和文件清单摘要固定保存，实际环境另核验；镜像名称或Suite标签本身不能证明组件身份。0.9.14 可在与原输入相符时用作局部标准，也可作为额外指定的受控目标。历史AA需要适当Mosek安装与许可证，源码可下载或能启动不等于真实样本已验证。
 
 ## 图表、统计与兼容判定
 
@@ -133,6 +149,7 @@ asconcordance run --manifest batch.manifest.json --out runs/batch01
 | `cohort_compatibility.*`、`cohort_compatibility_metrics.tsv` | 整组失配、区间、阈值、独立单位数和统计判定 |
 | `sample_progress.json`、`sample_progress.tsv` | 样本处理顺序、进度和结果状态计数 |
 | `downstream/` | 分层差异、统计和兼容判定 |
+| `local_cnv_comparator_{seeds,samples,cohort}.tsv`、`local_cnv_comparator_cohort.*` | 局部 CNVkit 相对输入同版本的结果、计数、描述性区间及整组图 |
 | `sampling/`、`source_bridge/` | 冻结抽样与来源复现检查 |
 | `imports/`、`reclassifications/`、`*_jobs/`、`cnv_cache/` | 小型结果副本、日志、中间文件和缓存证据 |
 | 各类provenance、版本锁和 `run_metadata.tsv` | 输入身份、资源、实际组件和参数 |
@@ -140,6 +157,8 @@ asconcordance run --manifest batch.manifest.json --out runs/batch01
 重复同一run命令可续跑。缓存先核对原输出、实际源码/依赖和参数，再重新解析，不直接相信缓存标签。改变清单需新输出目录。BAM采用首、中、尾三段64KiB抽样指纹，不声称全文件完整性校验。
 
 ## 验证状态
+
+0.4.2 在本机通过全部 311 项回归。另在一对人工肿瘤和正常 BAM 上固定来源 AA 1.6.r1，以局部 CNVkit 0.9.14 为标准，实际比较了 0.9.10 和 0.9.13。四个历史版本的原生 AA 合成对照及其范围见 [验证记录](docs/validation_status.md)。
 
 0.4.0 批量更新已完成 **257 项本地测试，另 1 项可选集成跳过**。人工数据验证了公共批量导入、串行人工 BAM 调用、失败后继续、中断续跑、患者分组及整组图的精确置信界；这属于程序验证，不是患者兼容结论。
 

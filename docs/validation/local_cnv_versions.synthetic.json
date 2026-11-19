@@ -1,0 +1,95 @@
+{
+  "data": "SYNTHETIC_ONLY",
+  "source_cnvkit_version": "0.9.14",
+  "fixed_seed_filter": "Suite 1.6.1 / AA 1.6.r1",
+  "candidate_count": 1,
+  "candidate_bp": 110000,
+  "flank_each_side_bp": 100000,
+  "background_bp": 800000,
+  "expanded_local_targets_bp": 1110000,
+  "unique_local_designs_observed": 1,
+  "observed_retained_and_evaluable": {
+    "0.9.10": [
+      1,
+      1
+    ],
+    "0.9.13": [
+      1,
+      1
+    ],
+    "0.9.14": [
+      1,
+      1
+    ]
+  },
+  "same_source_filter_comparisons": {
+    "0.9.10": {
+      "candidate_retention_difference": 0.0,
+      "interval_jaccard": 1.0,
+      "extra_count": 0,
+      "missed_count": 0
+    },
+    "0.9.13": {
+      "candidate_retention_difference": 0.0,
+      "interval_jaccard": 1.0,
+      "extra_count": 0,
+      "missed_count": 0
+    }
+  },
+  "original_workflow_calibration": "unverified",
+  "independent_units": 1,
+  "patient_data_access": false,
+  "public_with_bam_cli": {
+    "source_suite": "suite-1.6.1",
+    "fixed_reference": "suite-1.6.2",
+    "native_cnvkit_version_for_both_suites": "0.9.13",
+    "local_measurements": [
+      {
+        "cnvkit": "0.9.14",
+        "role": "source_local_standard",
+        "origin": "controlled_local_job",
+        "mapped_suite_versions": [],
+        "candidate_retained": true
+      },
+      {
+        "cnvkit": "0.9.13",
+        "role": "comparison",
+        "origin": "native_source_job",
+        "mapped_suite_versions": [
+          "suite-1.6.1",
+          "suite-1.6.2"
+        ],
+        "candidate_retained": true
+      },
+      {
+        "cnvkit": "0.9.10",
+        "role": "comparison",
+        "origin": "controlled_local_job",
+        "mapped_suite_versions": [],
+        "candidate_retained": true
+      }
+    ],
+    "downstream": {
+      "suite-1.6.1": "ok",
+      "suite-1.6.2": "ok"
+    },
+    "result_tables": [
+      "result.tsv",
+      "local_cnv_comparator_seeds.tsv",
+      "local_cnv_comparator_samples.tsv",
+      "local_cnv_comparator_cohort.tsv"
+    ],
+    "offline_report_replay": {
+      "verified_saved_inputs": 4,
+      "unchanged_tables": [
+        "result.tsv",
+        "local_cnv_comparator_seeds.tsv",
+        "local_cnv_comparator_samples.tsv",
+        "local_cnv_comparator_cohort.tsv",
+        "downstream_similarity_samples.tsv",
+        "upstream_similarity_pairs.tsv"
+      ]
+    },
+    "formal_decision": "insufficient_evidence"
+  }
+}

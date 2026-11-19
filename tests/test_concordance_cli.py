@@ -41,6 +41,22 @@ class ConcordanceCliTests(unittest.TestCase):
             self.assertIn(runtime['id'], runtime['aa_script'])
         self.assertEqual(result['samples'][0]['source_result']['aa_dir'],'relative/aa')
 
+    def test_build_keeps_original_version_even_when_no_target_recipe_uses_it(self):
+        manifest, prepared, templates, cnv, lock = self.fixture()
+        original = {'version':'0.9.14', 'python':'/extra/bin/python', 'script':'/extra/bin/cnvkit.py'}
+        manifest['samples'][0]['source_cnvkit_version'] = '0.9.14'
+        cnv[0].update(env={}, extra_path=['/tools/R'])
+        result = build(manifest, prepared, templates, cnv+[original], lock)
+        native = next(r for r in result['runtimes'] if r['cnvkit_version'] == cnv[0]['version'])
+        self.assertEqual(native['cnvkit_env'], {})
+        self.assertEqual(native['cnvkit_extra_path'], ['/tools/R'])
+        self.assertIn('MOSEKLM_LICENSE_FILE', native['env'])
+        self.assertIn(original, result['cnvkit_runtimes'])
+        self.assertNotIn('0.9.14', [r['cnvkit_version'] for r in result['runtimes']])
+        manifest['cnvkit_runtimes'] = [dict(original, python='/other/bin/python')]
+        with self.assertRaisesRegex(ValueError, 'Conflicting'):
+            build(manifest, prepared, templates, cnv+[original], lock)
+
     def test_missing_historical_cnvkit_is_not_replaced_by_newest(self):
         manifest, prepared, templates, cnv, lock = self.fixture()
         with self.assertRaisesRegex(ValueError, '0.9.10'):
@@ -54,7 +70,20 @@ class ConcordanceCliTests(unittest.TestCase):
             out = Path(temporary)/'demo'
             with patch('ascompare.concordance_report._plots'):
                 self.assertEqual(main(['demo','--out',str(out)]),0)
+                self.assertTrue(json.loads((out/'provenance.json').read_text())['synthetic'])
                 self.assertEqual(main(['report','--out',str(out)]),0)
+                detached = Path(temporary)/'report-copy'
+                original = {p.name: p.read_bytes() for p in out.glob('*records.json')}
+                self.assertEqual(main(['report', '--from-run', str(out), '--out', str(detached)]), 0)
+                self.assertEqual(original, {p.name: p.read_bytes() for p in out.glob('*records.json')})
+                self.assertTrue((detached/'result.tsv').is_file())
+                self.assertFalse(json.loads((detached/'report_provenance.json').read_text())['algorithms_rerun'])
+                self.assertEqual(main(['report', '--from-run', str(out), '--out', str(detached)]), 2)
+                local_record = out/'local_cnv_comparator_records.json'
+                self.assertIn(local_record.name, original)
+                local_record.write_text('[{"extra": true}]')
+                self.assertEqual(main(['report', '--out', str(out)]), 2)
+                local_record.write_bytes(original[local_record.name])
                 path=out/'downstream_records.json'
                 records=json.loads(path.read_text()); records[0]['labels']=['fabricated']
                 path.write_text(json.dumps(records))

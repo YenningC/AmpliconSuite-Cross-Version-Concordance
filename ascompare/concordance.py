@@ -16,6 +16,7 @@ from .parsing import merge_intervals
 from .runner import empty_record, execute, local_reference, check_ac_runtime, prepare_ac_input
 from .versions import load_lock, verify_runtime
 from .concordance_policy import guarded_command
+from .concordance_aa_stats import seed_stage_measurement, stage_measurement
 
 PROGRAM_VERSION = __version__
 FIXED_REFERENCE = 'suite-1.6.2'
@@ -47,11 +48,14 @@ def _resolve(value, parent):
         return value
     result = {}
     for k, v in value.items():
-        if v and (k in PATH_KEYS or k.endswith('_python')):
+        if k == 'cnvkit_runtimes':
+            from .local_cnv_comparator import resolve_registry
+            result[k] = resolve_registry(v, parent)
+        elif v and (k in PATH_KEYS or k.endswith('_python')):
             p = Path(v).expanduser()
             p = parent / p if not p.is_absolute() else p
             result[k] = str(p.absolute() if k.endswith('_python') else p.resolve())
-        elif k == 'extra_path':
+        elif k in {'extra_path', 'cnvkit_extra_path'}:
             result[k] = [str((parent / Path(p).expanduser()).resolve()) for p in v]
         else:
             result[k] = _resolve(v, parent)
@@ -192,6 +196,10 @@ def load_manifest(path):
     runtime_ids = [r['id'] for r in config.get('runtimes', [])]
     if len(runtime_ids) != len(set(runtime_ids)):
         raise ValueError('Duplicate runtime IDs')
+    from .local_cnv_comparator import is_exact_version
+    extra_cnv = config.get('local_cnv', {}).get('comparison_versions', [])
+    if not isinstance(extra_cnv, list) or not all(is_exact_version(v) for v in extra_cnv):
+        raise ValueError('local_cnv.comparison_versions requires a list of exact CNVkit versions')
     if config.get('threads', 1) != 1:
         raise ValueError('The bounded concordance currently executes serially')
     for key, allowed in (('aa_parameters', {'downsample'}), ('ac_parameters', {'min_size', 'min_flow'})):
@@ -304,7 +312,7 @@ def _save_cache(job, signature, record):
             for p in directory.rglob('*'):
                 if p.is_file() and not p.is_symlink():
                     files[str(p)] = digest(p)
-    for name in ('stages.json', 'ac.input', 'ac_summary_map.txt'):
+    for name in ('stages.json', 'ac.input', 'ac_summary_map.txt', 'aa_background.json', 'reference/coverage.stats'):
         if (run / name).is_file():
             files[str(run / name)] = digest(run / name)
     atomic_json(Path(job) / 'cache.json', dict(signature=signature, record=record, files=files))
@@ -320,7 +328,7 @@ def _new_attempt(job, create=True):
     return p
 
 
-def run_bounded_downstream(sample, seeds, runtime, entry, verified, config, out):
+def run_bounded_downstream(sample, seeds, runtime, entry, verified, config, out, measurement=None):
     """One joint selected-seed job per version. Connected expansion is not clipped."""
     from .parsing import parse_run, aa_amplicon_count
     supported = entry.get('supported_labels', entry.get('supported_classes', []))
@@ -333,7 +341,10 @@ def run_bounded_downstream(sample, seeds, runtime, entry, verified, config, out)
     effective_env = dict(os.environ, **runtime.get('env', {}))
     identity['solver_environment'] = {k: effective_env.get(k) for k in
         ('MOSEKLM_LICENSE_FILE', 'GRB_LICENSE_FILE', 'DYLD_LIBRARY_PATH', 'LD_LIBRARY_PATH', 'PATH')}
-    identity['python_hash_seed'] = effective_env.get('PYTHONHASHSEED')
+    # Some historical AA versions subsample using Python's per-process hash.
+    # Select a reproducible default, retaining an explicit caller's number.
+    hash_seed = effective_env.get('PYTHONHASHSEED', '0')
+    identity['python_hash_seed'] = hash_seed
     license_paths = [Path.home() / 'mosek' / 'mosek.lic']
     for k in ('MOSEKLM_LICENSE_FILE', 'GRB_LICENSE_FILE'):
         value = effective_env.get(k)
@@ -343,7 +354,16 @@ def run_bounded_downstream(sample, seeds, runtime, entry, verified, config, out)
         'path': str(p), 'exists': p.is_file(),
         'bytes': p.stat().st_size if p.is_file() else None,
         'mtime_ns': p.stat().st_mtime_ns if p.is_file() else None} for p in license_paths]
-    signature = _signature(dict(seeds=seeds, inputs=sample['_input_identities'], runtime=runtime,
+    background = measurement or dict(mode='native_measurement', reason='No eligible same-version seed-stage measurement')
+    if (background['mode'] == 'same_version_seed_stage'
+            and any(c.isspace() for c in str(Path(sample['alignment']).resolve()))
+            and any(c.isspace() for c in str(Path(out).absolute()))):
+        background = dict(mode='native_measurement',
+            reason='BAM and working paths both contain whitespace; native AA cannot match a private cache alias')
+    reuse_stats = background['mode'] == 'same_version_seed_stage'
+    signature = _signature(dict(seeds=seeds, background_mode=background['mode'],
+        raw_stats_sha256=background.get('sha256'), stats_handoff_sha256=digest(Path(__file__).with_name('concordance_aa_stats.py')),
+        inputs=sample['_input_identities'], runtime=runtime,
         verified=identity, reference=config['reference'], reference_identity=config.get('_reference_identity'), policy=config.get('io_policy', {}),
         runner_sha256=digest(__file__), ac_input_writer_sha256=digest(Path(__file__).with_name('runner.py')),
         policy_executor_sha256=digest(Path(__file__).with_name('concordance_policy.py')),
@@ -365,6 +385,8 @@ def run_bounded_downstream(sample, seeds, runtime, entry, verified, config, out)
     stages, stage = {}, 'input_check'
     record = None
     try:
+        if not re.fullmatch(r'[0-9]{1,10}', hash_seed) or int(hash_seed) > 4294967295:
+            raise ValueError('Bounded AA requires a numeric PYTHONHASHSEED between 0 and 4294967295 for reproducible downsampling')
         if not verified.get('ready'):
             raise ValueError('Runtime source/version checks failed: ' + '; '.join(verified.get('diagnostics', [])))
         bed = attempt / 'selected_seeds.bed'
@@ -381,7 +403,15 @@ def run_bounded_downstream(sample, seeds, runtime, entry, verified, config, out)
                   '--ref', sample['reference_build'], '--runmode', 'FULL', '--extendmode', 'EXPLORE',
                   '--downsample', str(params.get('downsample', -1))]
         help_text = verified.get('aa', {}).get('help', '')
-        if '--no_cstats' in help_text:
+        evidence = {k: v for k, v in background.items() if k != 'fields'}
+        evidence.update(original_bam=sample['alignment'], reuse_confirmed=False, python_hash_seed=hash_seed)
+        atomic_json(attempt / 'aa_background.json', evidence)
+        if reuse_stats:
+            aaargs[1] = stage_measurement(background, attempt, sample['alignment'])
+            evidence['reader_bam_path'] = aaargs[1]
+            evidence['staged_sha256'] = digest(attempt / 'reference' / 'coverage.stats')
+            atomic_json(attempt / 'aa_background.json', evidence)
+        elif '--no_cstats' in help_text:
             aaargs.append('--no_cstats')
         solver = runtime.get('solver', 'clarabel' if entry['aa']['version'].startswith('1.6.') else 'mosek')
         if '--solver' in help_text:
@@ -392,12 +422,24 @@ def run_bounded_downstream(sample, seeds, runtime, entry, verified, config, out)
         command = guarded_command(runtime['aa_python'], runtime['aa_script'], aaargs, config['_io_policy_path'])
         stages[stage] = dict(status='running', argv=command, started=now())
         atomic_json(attempt / 'stages.json', stages)
-        rc = execute(command, attempt, env, attempt / 'aa.log', timeout=config.get('job_timeout_seconds', 3600))
+        rc = execute(command, attempt, dict(env, PYTHONHASHSEED=hash_seed), attempt / 'aa.log',
+                     timeout=config.get('job_timeout_seconds', 3600))
         stages[stage].update(status='complete' if rc == 0 else 'failed', returncode=rc, ended=now())
         atomic_json(attempt / 'stages.json', stages)
+        aa_log = (attempt / 'aa.log').read_text(errors='replace')
+        if reuse_stats:
+            evidence['reuse_confirmed'] = ('Reusing cstats from ' + str(attempt / 'reference' / 'coverage.stats') in aa_log
+                and digest(attempt / 'reference' / 'coverage.stats') == evidence['staged_sha256'])
+            atomic_json(attempt / 'aa_background.json', evidence)
         if rc:
-            raise RuntimeError('Bounded AA failed or exceeded its I/O budget; see aa.log')
-        if 'Traceback (most recent call last)' in (attempt / 'aa.log').read_text(errors='replace'):
+            for audit in sorted(attempt.glob('bam_access.*.json')):
+                access = json.loads(audit.read_text())
+                if access.get('blocked'):
+                    raise RuntimeError(access['blocked'][0] + '; see ' + audit.name)
+            raise RuntimeError('Bounded AA failed; see aa.log')
+        if reuse_stats and not evidence['reuse_confirmed']:
+            raise RuntimeError('Native AA did not confirm use of its staged coverage.stats')
+        if 'Traceback (most recent call last)' in aa_log:
             raise RuntimeError('AA logged an exception despite exit zero')
         cycles = sorted((attempt / 'aa').glob('*_amplicon*_cycles.txt'))
         if aa_amplicon_count(attempt) != len(cycles):
@@ -438,9 +480,13 @@ def run_bounded_downstream(sample, seeds, runtime, entry, verified, config, out)
         atomic_json(attempt / 'stages.json', stages)
         raise
     except Exception as exc:
-        stages[stage] = dict(status='failed', reason=str(exc))
+        stages.setdefault(stage, {}).update(status='failed', reason=str(exc))
         atomic_json(attempt / 'stages.json', stages)
         record = empty_record(sid, '__selected_seeds__', vid, 'failed', stage, str(exc), supported_labels=supported)
+    finally:
+        alias = attempt / 'coverage_input.bam'
+        if alias.is_symlink():
+            alias.unlink()
     record.update(run_dir=str(attempt), analysis_kind='aa_ac', source_version=sample['source_version'],
                   source_aa_version=entry['aa']['version'], provenance_kind='bounded_reconstruction',
                   comparison_eligible=record['status'] in ('ok', 'not_detected'),
@@ -513,9 +559,14 @@ def run_concordance(config, lock, entries, out, check_only=False):
 
 def _run_locked(config, lock, entries, out, check_only):
     from .concordance_import import import_result, reclassify_cached, _artifacts, MAX_FILE_BYTES, MAX_TOTAL_BYTES
+    from .local_cnv_comparator import run_local_cnv_comparators
     from .concordance_cnv import run_local_upstream
     from .concordance_report import write_concordance_reports
     config = copy.deepcopy(config)
+    if config['mode'] == 'with_bam':
+        from .concordance_cnv_source import identify_source_cnvkit
+        for sample in config['samples']:
+            identify_source_cnvkit(sample)
     if config.get('runtimes') and re.search(r'\s', str(out)):
         raise ValueError('Native AC input tables do not support whitespace in working/output paths; choose a separate path without whitespace')
     lengths = _reference_lengths(config)
@@ -526,10 +577,11 @@ def _run_locked(config, lock, entries, out, check_only):
         raise ValueError('Manifest changed; choose a new output directory')
     atomic_json(provenance, dict(program='AmpliconSuite Cross-Version Concordance', program_version=PROGRAM_VERSION,
         created_utc=now(), manifest_hash=run_identity, reference_version=FIXED_REFERENCE,
-        mode=config['mode'], whole_genome_bam_operations='prohibited', synthetic=config.get('_synthetic', False)))
+        mode=config['mode'], whole_genome_bam_operations='prohibited', synthetic=bool(config.get('synthetic', config.get('_synthetic', False)))))
     atomic_json(out / 'versions.lock.json', lock)
     runtimes = {r['id']: r for r in config.get('runtimes', [])}
     checks, upstream, downstream, source_files = [], [], [], []
+    local_cnv_records = []
     progress = [dict(order=i, sample_id=s['sample_id'], source_version=s['source_version'],
                      state='queued', updated_utc=now()) for i, s in enumerate(config['samples'], 1)]
 
@@ -619,6 +671,10 @@ def _run_locked(config, lock, entries, out, check_only):
             checks.append(dict(sample_id=sid, status='ok', seed_count=len(seeds),
                 reference_build=build, reference_identity='declared_build_and_contig_lengths_only',
                 reason='No whole-genome BAM validation performed'))
+            if config['mode'] == 'with_bam':
+                checks[-1].update(source_cnvkit_version=sample.get('source_cnvkit_version'),
+                                  source_cnvkit_origin=sample['source_cnvkit_evidence']['origin'],
+                                  source_cnvkit_issue=sample.get('_source_cnvkit_issue'))
             record_progress(sample, 'ready')
         except Exception as exc:
             checks.append(dict(sample_id=sid, status='failed', reason=str(exc), stage='input_check'))
@@ -645,7 +701,10 @@ def _run_locked(config, lock, entries, out, check_only):
                 r = empty_record(sid, '__input_check__', vid, 'failed', 'input_check', sample['_input_failed'])
                 r.update(analysis_kind='aa_ac', source_version=source, comparison_eligible=False)
                 downstream.append(r)
+            if config['mode'] == 'with_bam':
+                local_cnv_records.extend(run_local_cnv_comparators(sample, config, entries, runtimes, verified, [], out))
             record_progress(sample, 'input_failed')
+            atomic_json(out / 'local_cnv_comparator_records.json', local_cnv_records)
             atomic_json(out / 'downstream_records.json', downstream)
             continue
         record_progress(sample, 'running')
@@ -710,6 +769,7 @@ def _run_locked(config, lock, entries, out, check_only):
             local_config = dict(config)
             local_config['_io_policy_path'] = sample['_policy_path']
             local_config['_cnv_cache_dir'] = str(out / 'cnv_cache')
+            native_source_rows = []
             for vid in versions:
                 print(f'  {sid} / {vid}: local upstream and selected-seed downstream', flush=True)
                 runtime, entry = runtimes.get(vid), entries[vid]
@@ -722,16 +782,23 @@ def _run_locked(config, lock, entries, out, check_only):
                             verified[vid] = dict(ready=False, diagnostics=[str(exc)], id=vid)
                         atomic_json(out / 'runtime_check.json', verified)
                     aa_verified = verified[vid].get('aa', {})
+                    measurement = None
                     if aa_verified.get('version') == entry['aa']['version'] and aa_verified.get('sha256'):
                         upstream_attempt = _new_attempt(out / 'upstream_jobs' / sid / vid)
-                        upstream.extend(run_local_upstream(sample, runtime, entry, local_config, upstream_attempt))
+                        upstream_rows = run_local_upstream(sample, runtime, entry, local_config, upstream_attempt)
+                        upstream.extend(upstream_rows)
+                        if vid == source:
+                            native_source_rows = upstream_rows
+                        measurement = seed_stage_measurement(upstream_attempt, upstream_rows, sample, runtime,
+                                                             verified[vid], local_config)
                     else:
                         for seed in seeds or [dict(seed_id='__no_seeds__')]:
                             upstream.append(dict(sample_id=sid, seed_id=seed['seed_id'], version=vid, source_version=source,
                                 status='unsupported', reason='AA seed-filter source/runtime could not be verified',
                                 comparison_eligible=False, calibration_status='unverified', cnvkit_version=runtime.get('cnvkit_version')))
                     if chosen:
-                        joint = run_bounded_downstream(sample, chosen, runtime, entry, verified[vid], local_config, out / 'downstream_jobs' / sid / vid)
+                        joint = run_bounded_downstream(sample, chosen, runtime, entry, verified[vid], local_config,
+                                                       out / 'downstream_jobs' / sid / vid, measurement)
                         if vid == source:
                             bridge = _bridge(baseline, joint, chosen)
                             sample['source_bridge_status'] = 'passed' if bridge and all(r['passed'] for r in bridge) else 'failed'
@@ -753,6 +820,9 @@ def _run_locked(config, lock, entries, out, check_only):
                         r = empty_record(sid, seed['seed_id'], vid, 'missing', 'aa', 'No configured AA+AC runtime')
                         r.update(analysis_kind='aa_ac', source_version=source, comparison_eligible=False)
                         downstream.append(r)
+            local_cnv_records.extend(run_local_cnv_comparators(
+                sample, local_config, entries, runtimes, verified, native_source_rows, out))
+        atomic_json(out / 'local_cnv_comparator_records.json', local_cnv_records)
         atomic_json(out / 'downstream_records.json', downstream)
         atomic_json(out / 'upstream_records.json', upstream)
         record_progress(sample, 'finished')
@@ -762,9 +832,10 @@ def _run_locked(config, lock, entries, out, check_only):
     table(out / 'run_metadata.tsv', [dict(program_version=PROGRAM_VERSION, created_utc=now(),
         reference_version=FIXED_REFERENCE, mode=config['mode'], manifest_hash=run_identity,
         whole_genome_bam_operations='prohibited', **s) for s in source_files])
-    summary = write_concordance_reports(out, downstream, upstream, config)
+    atomic_json(out / 'local_cnv_comparator_records.json', local_cnv_records)
+    summary = write_concordance_reports(out, downstream, upstream, config, local_cnv_records=local_cnv_records)
     atomic_json(out / 'report_inputs.sha256.json', {name: digest(out / name) for name in
-        ('downstream_records.json', 'upstream_records.json', 'config.resolved.json')})
+        ('downstream_records.json', 'upstream_records.json', 'config.resolved.json', 'local_cnv_comparator_records.json')})
     return summary
 
 
@@ -777,6 +848,7 @@ def main(argv=None):
         p.add_argument('--manifest', required=True)
         p.add_argument('--out', required=True)
     p = sub.add_parser('report'); p.add_argument('--out', required=True)
+    p.add_argument('--from-run', help='Read verified records from a finished run and write a separate report to a new directory')
     p = sub.add_parser('demo'); p.add_argument('--out', required=True)
     p = sub.add_parser('import-samples', help='Convert a local sample TSV and shared JSON config into a batch manifest')
     p.add_argument('--samples', required=True)
@@ -815,14 +887,33 @@ def main(argv=None):
         if args.command == 'report':
             from .concordance_report import write_concordance_reports
             out = Path(args.out).resolve()
-            run_version = json.loads((out / 'provenance.json').read_text()).get('program_version')
-            if run_version not in {PROGRAM_VERSION, '0.3.0', '0.3.1', '0.3.2'}:
+            source = Path(args.from_run).resolve() if args.from_run else out
+            original = json.loads((source / 'provenance.json').read_text())
+            run_version = original.get('program_version')
+            if run_version not in {PROGRAM_VERSION, '0.4.1', '0.4.0', '0.3.0', '0.3.1', '0.3.2'}:
                 raise ValueError('Use the original program version to redraw this report, or run the manifest into a new output directory')
-            expected = json.loads((out / 'report_inputs.sha256.json').read_text())
-            if not all((out / name).is_file() and digest(out / name) == value for name, value in expected.items()):
-                raise ValueError('Report inputs changed after execution; rerun the same manifest to revalidate, or start a new analysis')
-            write_concordance_reports(out, json.loads((out / 'downstream_records.json').read_text()),
-                json.loads((out / 'upstream_records.json').read_text()), json.loads((out / 'config.resolved.json').read_text()))
+            names = ('downstream_records.json', 'upstream_records.json', 'config.resolved.json')
+            if run_version == PROGRAM_VERSION:
+                names += ('local_cnv_comparator_records.json',)
+            expected = json.loads((source / 'report_inputs.sha256.json').read_text())
+            if set(expected) != set(names):
+                raise ValueError('Incomplete report input checksum manifest')
+            inputs = {}
+            for name in names:
+                data = (source / name).read_bytes()
+                if hashlib.sha256(data).hexdigest() != expected[name]:
+                    raise ValueError('Report inputs changed after execution; revalidate before replay')
+                inputs[name] = json.loads(data)
+            if args.from_run:
+                if out == source or source in out.parents or out in source.parents:
+                    raise ValueError('Choose a new report directory separate from the original run')
+                out.mkdir(parents=True, exist_ok=False)
+            write_concordance_reports(out, inputs['downstream_records.json'], inputs['upstream_records.json'],
+                                      inputs['config.resolved.json'], save_records=False,
+                                      local_cnv_records=inputs.get('local_cnv_comparator_records.json'))
+            atomic_json(out / 'report_provenance.json', dict(
+                source_directory=str(source), source_run_version=run_version, report_version=PROGRAM_VERSION,
+                report_inputs_sha256=expected, algorithms_rerun=False, created_utc=now()))
         else:
             config, lock, entries = load_manifest(args.manifest)
             result = run_concordance(config, lock, entries, args.out, args.command == 'check')

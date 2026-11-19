@@ -53,6 +53,27 @@ def run(config, downstream, upstream):
 
 
 class ConcordanceReportTests(unittest.TestCase):
+    def test_result_exposes_independent_upstream_and_downstream_endpoints(self):
+        config, downstream, upstream = fixture(1)
+        for record in upstream:
+            record.update(retained_intervals=[["chr1", 10, 15]], status="not_retained", retention_fraction=.5)
+        for record in downstream:
+            if record["version"] == OTHER:
+                record.update(labels=["BFB"], features=[dict(label="BFB", intervals=record["intervals"])])
+        with tempfile.TemporaryDirectory() as tmp, patch("ascompare.concordance_report._plots"):
+            result = write_concordance_reports(tmp, downstream, upstream, config)
+            row = next(r for r in result["result"] if r["target_version"] == OTHER and r["comparator_version"] == REF)
+            self.assertEqual(row["upstream_interval_jaccard"], 1)
+            self.assertEqual((row["upstream_retained_count"], row["upstream_evaluable_count"]), (0, 1))
+            self.assertEqual(row["upstream_retained_ratio"], 0)
+            self.assertEqual(row["ac_feature_interval_jaccard"], 1)
+            self.assertEqual((row["full_label_agreement"], row["full_label_compared_count"]), (0, 1))
+            self.assertIsNone(row["raw_aa_interval_jaccard"])
+            self.assertIn("0/1", (Path(tmp)/"result.md").read_text())
+            self.assertIn("result.md", (Path(tmp)/"report.md").read_text())
+            self.assertEqual(json.loads(json.dumps(result["result"])),
+                             json.loads((Path(tmp)/"summary.json").read_text())["result"])
+
     def test_source_to_target_is_not_silently_replaced_by_reference_comparison(self):
         config, downstream, upstream = fixture()
         for row in downstream:

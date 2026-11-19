@@ -77,6 +77,20 @@ class BoundedPolicyTests(unittest.TestCase):
         r = self.run_script('pysam.bedcov('+repr(str(bed))+','+repr(str(self.bam))+')')
         self.assertNotEqual(r.returncode,0)
 
+    def test_unique_budget_counts_overlaps_and_only_records_attempted_new_bases(self):
+        policy=json.loads(self.policy.read_text())
+        policy.update(max_unique_bp=2000,max_total_fetch_bp=2000000)
+        self.policy.write_text(json.dumps(policy))
+        ranges=[(300,400),(1000,1300),(550,800),(390,610),(200,1200),(1200,1300),
+                (1400,1500),(1300,1400),(800,900),(1600,2301)]
+        body="for a,b in "+repr(ranges)+":\n list(bam.fetch('chr1',a,b))"
+        result=self.run_script(body)
+        self.assertNotEqual(result.returncode,0)
+        audit=json.loads(next(self.root.glob('bam_access.*.json')).read_text())
+        self.assertEqual(audit['unique_requested_bp'],1300)
+        self.assertEqual(audit['first_rejected_unique_request'],dict(chrom='chr1',start=1600,end=2301,
+            new_unique_bp=701,projected_unique_bp=2001,accepted_unique_bp=1300,limit_bp=2000))
+
     def test_chunked_genome_tiling_is_forbidden(self):
         policy=json.loads(self.policy.read_text())
         policy.update(max_total_fetch_bp=2000000,max_fetch_bp=100000)

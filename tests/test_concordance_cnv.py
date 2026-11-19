@@ -132,6 +132,41 @@ class BoundedLocalCnvTests(unittest.TestCase):
         self.assertEqual([x[2] for x in self.commands], ['seed_processing'])
         self.assertEqual(first['cnv_cache_key'], second['cnv_cache_key'])
 
+    def test_separate_cnv_runtime_and_aa_environment(self):
+        envs = {}
+        original = self.fake_run
+        def traced(python, script, args, policy, cwd, env, stage, timeout=3600):
+            envs[stage] = env.get('PROFILE')
+            return original(python, script, args, policy, cwd, env, stage, timeout)
+        self.fake_run = traced
+        runtime = dict(self.runtime, env={'PROFILE':'SOURCE_AA'}, cnvkit_env={'PROFILE':'CNV_A'})
+        first = self.run_mock('first', runtime)[0]
+        self.assertEqual(envs['coverage_tumor'], 'CNV_A')
+        self.assertEqual(envs['seed_processing'], 'SOURCE_AA')
+        runtime['cnvkit_env'] = {'PROFILE':'CNV_B'}
+        second = self.run_mock('second', runtime)[0]
+        self.assertNotEqual(first['cnv_cache_key'], second['cnv_cache_key'])
+        self.assertEqual(envs['coverage_tumor'], 'CNV_B')
+        self.assertEqual(envs['seed_processing'], 'SOURCE_AA')
+
+    def test_controlled_seed_filter_resume_revalidates_and_invalidates_tampering(self):
+        self.config.update(_controlled_cnv_role='comparison', _fixed_source_aa_identity={'commit':'test'},
+                           _reference_identity=[{'sha256':'mock-reference'}])
+        a=self.run_mock('control/attempt_0001')[0]
+        self.commands.clear()
+        b=self.run_mock('control/attempt_0002')[0]
+        self.assertEqual(a['retained_intervals'], b['retained_intervals'])
+        self.assertTrue(b['cnv_cache_hit'])
+        self.assertEqual(self.commands, [])
+        self.assertTrue(json.loads(Path(b['provenance']).read_text())['seed_filter_cache']['hit'])
+        (self.root/'control/attempt_0001/local_amplified.bed').write_text('chr1\t10\t31\n')
+        self.run_mock('control/attempt_0003')
+        self.assertEqual([x[2] for x in self.commands], ['seed_processing'])
+        self.commands.clear()
+        self.config['_fixed_source_aa_identity']['commit'] = 'changed'
+        self.run_mock('control/attempt_0004')
+        self.assertEqual([x[2] for x in self.commands], ['seed_processing'])
+
     def test_cache_tamper_and_input_changes_force_recalculation(self):
         self.run_mock('first')
         cached = next((self.root / 'cache').rglob('tumor.cns'))

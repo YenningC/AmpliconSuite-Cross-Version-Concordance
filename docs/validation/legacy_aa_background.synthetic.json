@@ -1,0 +1,174 @@
+[
+  {
+    "version": "suite-1.2.2",
+    "aa_version": "1.3.r8",
+    "aa_commit": "a4a92569d81bdf56ec4458177eef127d0fc1c374",
+    "synthetic": true,
+    "python_hash_seed": "0",
+    "downsample": 0.35,
+    "scope": "background-only and single fixed seed with native AA FULL/EXPLORE; synthetic, no AC",
+    "producer": {
+      "returncode": 0,
+      "unique_bp": 8768698,
+      "fetches": 4004,
+      "blocked": []
+    },
+    "cold": {
+      "returncode": 0,
+      "unique_bp": 8768698,
+      "fetches": 4004,
+      "blocked": []
+    },
+    "reuse": {
+      "returncode": 0,
+      "unique_bp": 0,
+      "fetches": 0,
+      "blocked": [],
+      "reuse_confirmed": true
+    },
+    "seeded_cold": {
+      "returncode": 0,
+      "unique_bp": 19726218,
+      "fetches": 10591,
+      "blocked": []
+    },
+    "seeded_reuse": {
+      "returncode": 0,
+      "unique_bp": 15503611,
+      "fetches": 6587,
+      "blocked": [],
+      "reuse_confirmed": true
+    },
+    "native_stats_identical": true,
+    "seeded_graph_cycles_identical": true
+  },
+  {
+    "version": "suite-1.3.3",
+    "aa_version": "1.4.r2",
+    "aa_commit": "3a188c49df5ab47cbef97e685bc853a15fbeb1ad",
+    "synthetic": true,
+    "python_hash_seed": "0",
+    "downsample": 0.35,
+    "scope": "background-only and single fixed seed with native AA FULL/EXPLORE; synthetic, no AC",
+    "producer": {
+      "returncode": 0,
+      "unique_bp": 8768698,
+      "fetches": 4004,
+      "blocked": []
+    },
+    "cold": {
+      "returncode": 0,
+      "unique_bp": 8768698,
+      "fetches": 4004,
+      "blocked": []
+    },
+    "reuse": {
+      "returncode": 0,
+      "unique_bp": 0,
+      "fetches": 0,
+      "blocked": [],
+      "reuse_confirmed": true
+    },
+    "seeded_cold": {
+      "returncode": 0,
+      "unique_bp": 19726218,
+      "fetches": 10591,
+      "blocked": []
+    },
+    "seeded_reuse": {
+      "returncode": 0,
+      "unique_bp": 15503611,
+      "fetches": 6587,
+      "blocked": [],
+      "reuse_confirmed": true
+    },
+    "native_stats_identical": true,
+    "seeded_graph_cycles_identical": true
+  },
+  {
+    "version": "suite-1.3.4",
+    "aa_version": "1.4.r2",
+    "aa_commit": "3a188c49df5ab47cbef97e685bc853a15fbeb1ad",
+    "synthetic": true,
+    "python_hash_seed": "0",
+    "downsample": 0.35,
+    "scope": "background-only and single fixed seed with native AA FULL/EXPLORE; synthetic, no AC",
+    "producer": {
+      "returncode": 0,
+      "unique_bp": 8768698,
+      "fetches": 4004,
+      "blocked": []
+    },
+    "cold": {
+      "returncode": 0,
+      "unique_bp": 8768698,
+      "fetches": 4004,
+      "blocked": []
+    },
+    "reuse": {
+      "returncode": 0,
+      "unique_bp": 0,
+      "fetches": 0,
+      "blocked": [],
+      "reuse_confirmed": true
+    },
+    "seeded_cold": {
+      "returncode": 0,
+      "unique_bp": 19726218,
+      "fetches": 10591,
+      "blocked": []
+    },
+    "seeded_reuse": {
+      "returncode": 0,
+      "unique_bp": 15503611,
+      "fetches": 6587,
+      "blocked": [],
+      "reuse_confirmed": true
+    },
+    "native_stats_identical": true,
+    "seeded_graph_cycles_identical": true
+  },
+  {
+    "version": "suite-1.3.7",
+    "aa_version": "1.5.r2",
+    "aa_commit": "ef45113fcd95db9e75cd4a278f12c8db4a1b7d7f",
+    "synthetic": true,
+    "python_hash_seed": "0",
+    "downsample": 0.35,
+    "scope": "background-only and single fixed seed with native AA FULL/EXPLORE; synthetic, no AC",
+    "producer": {
+      "returncode": 0,
+      "unique_bp": 8768698,
+      "fetches": 4004,
+      "blocked": []
+    },
+    "cold": {
+      "returncode": 0,
+      "unique_bp": 8768698,
+      "fetches": 4004,
+      "blocked": []
+    },
+    "reuse": {
+      "returncode": 0,
+      "unique_bp": 0,
+      "fetches": 0,
+      "blocked": [],
+      "reuse_confirmed": true
+    },
+    "seeded_cold": {
+      "returncode": 0,
+      "unique_bp": 19377656,
+      "fetches": 10632,
+      "blocked": []
+    },
+    "seeded_reuse": {
+      "returncode": 0,
+      "unique_bp": 15488568,
+      "fetches": 6628,
+      "blocked": [],
+      "reuse_confirmed": true
+    },
+    "native_stats_identical": true,
+    "seeded_graph_cycles_identical": true
+  }
+]

@@ -6,9 +6,25 @@
 
 AmpliconSuite Cross-Version Concordance is an independent, local research tool. It compares existing AmpliconSuite outputs, orchestrates selected-seed AA/AC runs, and evaluates whether known candidate seeds remain selected after local CNVkit reassessment. It produces per-sample similarity ladders, paired difference tables and compatibility reports.
 
-**Version:** 0.4.0 · **Fixed reference:** Suite **1.6.2**, AA **1.6.r2**, AC **2.0.1**. The reference is frozen; installing a newer upstream release does not change it. This project is not an official AmpliconSuite component.
+**Version:** 0.4.2 · **Fixed reference:** Suite **1.6.2**, AA **1.6.r2**, AC **2.0.1**. The reference is frozen; installing a newer upstream release does not change it. This project is not an official AmpliconSuite component.
 
 > Similarity describes observed software outputs. It is not a probability of biological truth or proof that complete workflows are interchangeable. Compatibility remains **insufficient evidence** when margins are unspecified or evidence is inadequate.
+
+## Sample results and source-matched CNVkit controls (0.4.2)
+
+In `with_bam` mode each sample has its own local CNVkit standard: the version used to generate its input. For example, a sample originally processed with CNVkit 0.9.14 uses a local 0.9.14 run as its standard. Each target CNVkit uses the same tumor, normal-reference strategy, candidate windows, background, binning, segmentation settings and **source Suite AA seed filter**. Each distinct CNVkit version is evaluated once per sample in this comparison.
+
+The original Suite result directory can supply the version via a single `*_run_metadata.json` recording the CNVkit command and version. Alternatively, declare the exact `source_cnvkit_version` in the sample manifest or TSV. Conflicting evidence yields an unavailable standard. Configure its exact executable in the shared `cnvkit_runtimes` registry if it is absent from the configured Suite runtimes. Optional `local_cnv.comparison_versions` adds standalone CNVkit targets. [Configuration and controls](docs/local_cnv_calibration.md)
+
+Open `result.md`. Read the retained/evaluable counts for the standard and target alongside their **paired interval Jaccard** within original candidate regions. A high Jaccard can coexist with low retention of original candidates. `local_cnv_comparator_samples.tsv` gives paired counts, gains, losses and target-minus-standard retention change. Its cohort counterpart includes pointwise descriptive intervals with patient grouping when declared. A missing runtime, unknown source version or pair with no interval signal is explicitly identified. The Suite panel keeps its fixed reference and evaluates its own native CNVkit and AA combinations. Conditional Suite compatibility and the original-run retention check have separate evidence requirements.
+
+Downstream AA and AC interval Jaccards and full/shared class label agreement are in `result.tsv`. Generate a report in a fresh directory from verified 0.4.2 records or earlier 0.3.0–0.4.1 supported releases. Report replay reads saved results only. Older runs display `not_recorded_in_run` for the new local control. To measure it, start a new bounded `with_bam` run.
+
+```sh
+asconcordance report --from-run runs/comparison --out reports/comparison-0.4.2
+```
+
+[Source replay and local CNV calibration protocol](docs/source_reproduction.md)
 
 ## What it does
 
@@ -67,7 +83,7 @@ asconcordance report --out runs/comparison
 
 Paths are resolved relative to the manifest. Output must be separate from inputs and resources. Results can be specified with `aa_dir`/`ac_dir`, a `run_dir` containing `aa` and `ac`, or a recognizable Suite `result_dir`; ambiguous directories are rejected. Keep the original graph, cycles, summary, classification profiles and feature BED files where available. An image or summary label alone is insufficient.
 
-`check` inspects input declarations, coordinates, BAM headers, existing indexes and small result-file formats. `import_format_check.tsv` lists AA/AC file counts, headings and matching issues. `run` also checks real component versions and source identities. `report` redraws saved, integrity-checked records from the same program version without accessing BAM. Use a new output directory for runs started with an earlier release. Version 0.4.0 can redraw integrity-checked reports from 0.3.0, 0.3.1 and 0.3.2 without rerunning algorithms. A completed command/report does not imply that every scientific job succeeded: inspect coverage and failure tables.
+`check` inspects input declarations, coordinates, BAM headers, existing indexes and small result-file formats. `import_format_check.tsv` lists AA/AC file counts, headings and matching issues. `run` also checks real component versions and source identities. `report` redraws saved, integrity-checked records from the same program version without accessing BAM. Use a new output directory for runs started with an earlier release. A completed command/report does not imply that every scientific job succeeded: inspect coverage and failure tables.
 
 See the [server guide](docs/server_quickstart.md), [environment instructions](docs/environment_setup.md) and [local CNV calibration requirements](docs/local_cnv_calibration.md) for runtime configuration. These detailed technical notes are currently in Chinese; commands and configuration keys are shared across both languages.
 
@@ -126,7 +142,7 @@ Source-Suite reruns are compared with the supplied original results. Upstream ca
 
 These are explicit comparison component recipes. Source commits, archive hashes and source-manifest hashes are recorded in [`versions.lock.json`](versions.lock.json); CNVkit build-recipe evidence is in [`builtin_cnvkit_map.json`](ascompare/builtin_cnvkit_map.json). A Suite label or image name alone does not prove its installed components. Historical versions are never silently replaced. See [version evidence](docs/version_evidence.md) for qualifications, including Suite 1.3.4 and the separate legacy diagnostic recipe.
 
-CNVkit 0.9.14 is supported only as an explicitly identified controlled condition, not a substitute for those historical recipes. Historical AA requires an appropriate Mosek installation/license. See the validation record for the separate evidence levels: source lock, runtime launch, synthetic component test and real-sample workflow. For a downsampling reproducibility comparison, see the [cohort study guide](docs/cohort_study.md).
+CNVkit 0.9.14 can serve as the local source standard when it matches the original input, or as an additional controlled target. Historical AA requires an appropriate Mosek installation/license. See the validation record for the separate evidence levels: source lock, runtime launch, synthetic component test and real-sample workflow. For a downsampling reproducibility comparison, see the [cohort study guide](docs/cohort_study.md).
 
 ## Similarity and compatibility
 
@@ -163,6 +179,7 @@ Execution failures, missing files and unsupported classes remain distinct from t
 | `cohort_compatibility.*`, `cohort_compatibility_metrics.tsv` | Cohort endpoint differences, bounds, margins, independent n and final decisions |
 | `sample_progress.json`, `sample_progress.tsv` | Serial sample order, state and result status counts |
 | `downstream/` | Stratified comparisons, differences, statistics and compatibility decisions |
+| `local_cnv_comparator_{seeds,samples,cohort}.tsv`, `local_cnv_comparator_cohort.*` | Source-matched CNVkit contrasts, evaluable counts, descriptive intervals and cohort figure |
 | `sampling/`, `source_bridge/` | Frozen seed selection and source-result reproducibility checks |
 | `imports/`, `reclassifications/`, `*_jobs/`, `cnv_cache/` | Staged small results, intermediate files, logs and cache evidence |
 | `provenance.json`, `input_identity.json`, `runtime_check.json`, `versions.lock.json`, `run_metadata.tsv` | Actual versions, parameters, input/resource identities and execution metadata |
@@ -170,6 +187,8 @@ Execution failures, missing files and unsupported classes remain distinct from t
 Repeat the same `run` command to resume. Successful caches are checked against raw output hashes and reparsed; changed inputs, code identities, dependencies or parameters prevent inappropriate reuse. Changed manifests require a new output directory. BAM identities use three 64 KiB samples and file metadata; they do not certify whole-file integrity.
 
 ## Validation status
+
+Local 0.4.2 regression passed all 311 tests. A separate integration run used native CNVkit 0.9.14 as the local standard for 0.9.10 and 0.9.13, with the same native AA 1.6.r1 seed filter on an artificial tumor and matched normal. See [validation status](docs/validation_status.md) for the four historical native AA controls.
 
 The 0.4.0 batch update passed **257 local tests with one optional integration skipped**. Public batch import, serial toy-BAM execution, failure continuation, interruption/resume, patient grouping and exact cohort-plot bounds were checked with synthetic inputs. This is software validation, not a patient compatibility result.
 

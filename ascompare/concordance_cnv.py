@@ -277,10 +277,15 @@ def _cached_cnv(sample, runtime, config, windows, identity, out, policy, env):
                   'reference_mode': reference_mode,
                   'runtime_variant': 'bounded_indexed_auxiliary_probes',
                   'launcher_sha256': hashlib.sha256(_CNV_LAUNCHER.encode()).hexdigest()}
+    # Software environment changes invalidate a measurement without changing the
+    # paired scientific design. Keep values out of the cache manifest.
+    env_spec = {'env': runtime.get('cnvkit_env', runtime.get('env', {})),
+                'extra_path': runtime.get('cnvkit_extra_path', runtime.get('extra_path', []))}
+    env_sha = hashlib.sha256(json.dumps(env_spec, sort_keys=True).encode()).hexdigest()
     signature = {'sample_id': sample['sample_id'], 'inputs': inputs,
                  'io_contract': {'policy': json.loads(Path(policy).read_text()),
                                  'guard_sha256': digest(Path(__file__).with_name('concordance_policy.py'))},
-                 'cnvkit': identity, 'parameters': parameters}
+                 'cnvkit': identity, 'cnv_environment_sha256': env_sha, 'parameters': parameters}
     key = hashlib.sha256(json.dumps(signature, sort_keys=True).encode()).hexdigest()
     cache_root = Path(config.get('_cnv_cache_dir', Path(out) / 'cnv_cache')) / key
     manifest_path = cache_root / 'complete.json'
@@ -470,6 +475,31 @@ def calibrate_source_retention(sample, runtime, rows, out):
     return rows
 
 
+def _previous_filter_bed(manifest, identity):
+    """Validate a prior successful controlled filter before reusing its small BED."""
+    if not manifest.is_file():
+        return None
+    try:
+        saved = json.loads(manifest.read_text())
+        if saved['identity'] != identity:
+            return None
+        attempt = saved['producer_attempt']
+        if not re.fullmatch(r'attempt_[0-9]+', attempt):
+            return None
+        directory = manifest.parent / attempt
+        bed = directory / 'local_amplified.bed'
+        if (directory.is_symlink() or bed.is_symlink() or not bed.is_file()
+                or bed.stat().st_size > 64 * 1024 * 1024 or digest(bed) != saved['bed_sha256']):
+            return None
+        for name in ('upstream_provenance.json', 'seed_processing.log'):
+            artifact = directory / name
+            if artifact.is_symlink() or not artifact.is_file() or digest(artifact) != saved['producer_sha256'][name]:
+                return None
+        return bed
+    except (OSError, KeyError, TypeError, ValueError):
+        return None
+
+
 def run_local_upstream(sample, runtime, entry, config, out):
     """Run bounded upstream once per sample/version; return candidate-level records."""
     out = Path(out).absolute()
@@ -525,7 +555,9 @@ def run_local_upstream(sample, runtime, entry, config, out):
         if not policy or not Path(policy).is_file():
             raise LocalFailure('unsupported', 'input_check', 'Bounded indexed-BAM policy is required')
         windows = prepare_windows(seeds, config['reference']['fasta'], settings, out)
-        env = _environment(runtime, runtime.get('cnvkit_python', runtime['aa_python']))
+        cnv_environment = dict(runtime, env=runtime.get('cnvkit_env', runtime.get('env', {})),
+                               extra_path=runtime.get('cnvkit_extra_path', runtime.get('extra_path', [])))
+        env = _environment(cnv_environment, runtime.get('cnvkit_python', runtime['aa_python']))
         identity = _probe_cnvkit(runtime, policy, out, env)
         cns, cache = _cached_cnv(sample, runtime, config, windows, identity, out, policy, env)
         local_bed = out / 'all_local_cnv_segments.bed'
@@ -558,18 +590,42 @@ def run_local_upstream(sample, runtime, entry, config, out):
                                        'Native CNS segments are clipped at unobserved gaps between local windows',
                                        'AA seed filtering retains its bounded indexed background estimation',
                                        'Candidate retention does not establish biological amplification or pipeline compatibility'])
-        atomic_json(out / 'upstream_provenance.json', provenance)
-        _run_tool(runtime['aa_python'], helper, args, policy, out, aa_env,
-                  'seed_processing', settings.get('timeout_seconds', 3600))
-        filter_log = (out / 'seed_processing.log').read_text(errors='replace')
-        if 'Traceback (most recent call last)' in filter_log or 'zero division error' in filter_log:
-            raise LocalFailure('failed', 'seed_processing', 'AA seed filter logged a numerical/processing error; empty output is not a valid negative')
         output = prefix.with_suffix('.bed')
+        filter_manifest = out.parent / 'filter_cache.json'
+        filter_identity, previous_bed = None, None
+        if (config.get('_controlled_cnv_role') and config.get('_fixed_source_aa_identity')
+                and config.get('_reference_identity')):
+            filter_inputs = dict(cnv_measurement=cache['key'], local_segments_sha256=digest(local_bed),
+                fixed_aa=config['_fixed_source_aa_identity'], build=config['reference']['build'],
+                reference=config['_reference_identity'], helper_sha256=digest(helper),
+                env=runtime.get('env', {}), extra_path=runtime.get('extra_path', []), gain=gain,
+                min_size=min_size, no_cstats='--no_cstats' in args,
+                candidate_ids=[s['seed_id'] for s in seeds])
+            filter_identity = hashlib.sha256(json.dumps(filter_inputs, sort_keys=True).encode()).hexdigest()
+            previous_bed = _previous_filter_bed(filter_manifest, filter_identity)
+            provenance['seed_filter_cache'] = dict(identity=filter_identity, hit=previous_bed is not None,
+                                                    producer_bed=str(previous_bed) if previous_bed else None)
+        atomic_json(out / 'upstream_provenance.json', provenance)
+        if previous_bed:
+            shutil.copyfile(previous_bed, output)
+            if digest(output) != digest(previous_bed):
+                raise LocalFailure('failed', 'seed_processing', 'Seed filter cache changed during reuse')
+            atomic_json(out / 'seed_processing.log', dict(cache_hit=True, producer_bed=str(previous_bed)))
+        else:
+            _run_tool(runtime['aa_python'], helper, args, policy, out, aa_env,
+                      'seed_processing', settings.get('timeout_seconds', 3600))
+            filter_log = (out / 'seed_processing.log').read_text(errors='replace')
+            if 'Traceback (most recent call last)' in filter_log or 'zero division error' in filter_log:
+                raise LocalFailure('failed', 'seed_processing', 'AA seed filter logged a numerical/processing error; empty output is not a valid negative')
         if not output.is_file():
             raise LocalFailure('missing', 'result_reading', 'AA seed filtering exited successfully but its BED is missing')
         lengths = {f[0]: int(f[1]) for f in
                    (line.split() for line in Path(str(config['reference']['fasta']) + '.fai').read_text().splitlines()) if f}
         intervals = _bed(output, lengths, 'result_reading')
+        if filter_identity and not previous_bed:
+            atomic_json(filter_manifest, dict(identity=filter_identity, producer_attempt=out.name,
+                bed_sha256=digest(output), producer_sha256={n: digest(out / n)
+                    for n in ('upstream_provenance.json', 'seed_processing.log')}))
         rows = []
         for seed in seeds:
             fraction = retention_fraction(seed, intervals)
@@ -580,7 +636,12 @@ def run_local_upstream(sample, runtime, entry, config, out):
                              cnv_cache_hit=cache['cache_hit'], cnv_cache_key=cache['key'],
                              provenance=str(out / 'upstream_provenance.json')))
             rows[-1]['comparison_eligible'] = True
-        calibrate_source_retention(sample, runtime, rows, out)
+        if config.get('_controlled_cnv_role') == 'comparison':
+            for row in rows:
+                row.update(calibration_role='candidate_observation', calibration_status='unverified',
+                           calibration_reason='Controlled CNVkit version compared to the sample-matched local standard')
+        else:
+            calibrate_source_retention(sample, runtime, rows, out)
         atomic_json(out / 'upstream_records.json', rows)
         return rows
     except LocalFailure as exc:

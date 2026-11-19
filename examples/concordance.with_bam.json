@@ -4,7 +4,7 @@
   "target_versions": ["suite-1.6.0", "suite-1.6.2"],
   "reference": {"build": "hg19", "fasta": "/resources/AA_DATA_REPO/hg19/hg19full.fa", "aa_data_repo": "/resources/AA_DATA_REPO"},
   "samples": [{
-    "sample_id": "EXAMPLE_01", "patient_id": "EXAMPLE_PATIENT_01", "source_version": "suite-1.6.0", "reference_build": "hg19",
+    "sample_id": "EXAMPLE_01", "patient_id": "EXAMPLE_PATIENT_01", "source_version": "suite-1.6.0", "source_cnvkit_version": "0.9.14", "reference_build": "hg19",
     "alignment": "/data/EXAMPLE_01/tumor.bam", "index": "/data/EXAMPLE_01/tumor.bam.bai",
     "normal_alignment": "/data/EXAMPLE_01/normal.bam", "normal_index": "/data/EXAMPLE_01/normal.bam.bai",
     "seeds_bed": "/data/EXAMPLE_01/source_AA_CNV_SEEDS.bed",
@@ -13,6 +13,9 @@
       "component_versions": {"aa": "1.6.r0", "ac": "2.0.0"}}
   }],
   "runtimes": [],
+  "cnvkit_runtimes": [
+    {"version": "0.9.14", "python": "/env/cnvkit-0.9.14/bin/python", "script": "/env/cnvkit-0.9.14/bin/cnvkit.py"}
+  ],
   "local_cnv": {"reference_mode": "matched_normal", "background_bed": "/data/validated_background.bed", "flank_bp": 100000,
     "bin_size": 1000, "max_window_bp": 25000000, "min_seed_overlap": 1.0, "cngain": 4.5, "cnsize_min": 50000},
   "sampling": {"max_seeds": 10, "random_seed": 20261117},

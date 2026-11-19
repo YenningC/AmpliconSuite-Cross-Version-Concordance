@@ -17,7 +17,8 @@
 | `alignment`, `index`, `seeds_bed` | `with_bam` 必需。排序 BAM、现成索引和源结果行的最终候选种子 BED |
 | `normal_alignment`, `normal_index` | 成对填写。`matched_normal` 需要同一患者的正常对照 |
 | `aa_version`, `ac_version` | 该行结果原始组件版本声明；不会被当作历史环境已核验的证据 |
-| `source_cnvkit_version`, `baseline_cns`, `source_seed_bed`, `baseline_provenance` | 可选的原有局部校准证据；缺失时保留相应未验证状态 |
+| `source_cnvkit_version` | 原样本实际使用的精确 CNVkit 版本，如 `0.9.14`；用于该样本的局部标准。来源结果有单份记录 CNVkit 执行命令与版本的 `*_run_metadata.json` 时可留空；声明和原记录冲突时标为不可用 |
+| `baseline_cns`, `source_seed_bed`, `baseline_provenance` | 原候选再保留的历史校准证据；缺失时保留未核实状态，仍可描述已实测的局部版本差异 |
 | `stages_json` | 可选的规范化运行阶段证据文件 |
 
 每行是一份现有版本结果。`results_only` 中，同一个 `sample_id` 可以出现多行，分别填写不同 `result_version`，归并到该样本的 `comparison_results`。每例必须恰好有一行来源版本结果。没有 BAM 时不能生成未提供的 AA 重建。`with_bam` 通常每例一行来源结果，程序将对内置目标版本运行局部上下游流程。
@@ -29,6 +30,8 @@
 选择 `examples/batch.with_bam.json` 或 `examples/batch.results_only.json`。配置不带 `samples`，或设置为空列表；样本全部来自 TSV。参考、内置目标版本、实际运行环境、计算预算和统计参数沿用单样本 JSON 配置。
 
 `with_bam` 示例的 `runtimes` 为空，使用前须配置实际精确版本环境。参考与正常参考策略必须适合整个批次。共享 `background_bed` 应事先验证适合这些样本及测序条件；程序逐例去掉与候选及延伸窗口重叠的部分，因此每例实际有效背景可能不同。不适用同一背景或实验条件的样本应分批运行。来源版本不同的样本自动分层，不将跨来源结果混在一个统计结论内。
+
+共享配置可加入顶层 `cnvkit_runtimes`，逐版填写 `version`、`python` 和 `script`。为整批所有样本实际使用的 CNVkit 准备精确环境。可用 `local_cnv.comparison_versions` 追加不在所选 Suite 配方中的目标。各例从自身来源 CNVkit 起步，并对所有目标固定该例来源 Suite 的 AA 筛种器。[完整示例](local_cnv_calibration.md)
 
 学习阶段可用 `statistics.primary_pairs: []` 只报告观察差异与区间。验证阶段先锁定版本对、容忍阈值和分析计划，再导入独立验证数据。默认不提供保证通过的容忍阈值；详见 [队列设计](cohort_study.md)。
 
@@ -52,6 +55,8 @@ TSV 内的相对文件路径以 TSV 所在目录为基准；共享配置中的�
 | `sample_reports.md`, `sample_plot_index.tsv` | 全部样本图链接，每例每种分析类型一张 |
 | `sample_ladders/*.{png,pdf,svg}` | 各版本检出、标签、区段与类别区段相似度；标出额外/遗漏/分类改变和有效分母。`with_bam` 增加已知候选保留面板 |
 | `sample_similarity.tsv`, `upstream_samples.tsv` | 每例观察数值和状态 |
+| `local_cnv_comparator_{seeds,samples,cohort}.tsv` | 以每例原 CNVkit 的局部结果为标准，报告配对保留数、额外/遗漏、保留率差、区段 Jaccard 和整组描述性置信区间 |
+| `local_cnv_comparator_cohort.{png,pdf,svg}` | 有 BAM 时的来源 CNVkit 分层队列对照图 |
 | `similarity_ladder.{png,pdf,svg}` | 来源分层的整组相似性及保守区间 |
 | `cohort_compatibility.{png,pdf,svg}` | 整组四项下游失配及适用的上游候选丢失、区间、阈值、独立单位数、有效/应评价数和联合判定 |
 | `cohort_compatibility_metrics.tsv` | 整组统计兼容图的精确绘图数据，包含区间类型、校正后 alpha、阈值、可评价状态和判定理由 |
@@ -69,5 +74,7 @@ TSV 内的相对文件路径以 TSV 所在目录为基准；共享配置中的�
 Use `import-samples --samples samples.tsv --config batch.json --out batch.manifest.json`, then the ordinary `check` and `run` commands. Each TSV row describes one existing version result. Required columns are `sample_id`, `source_version`, `reference_build`, and an explicit result directory specification. `result_version` defaults to the source version. Repeated sample IDs merge distinct existing versions; each sample needs exactly one source result. First appearance defines serial execution order. Use `patient_id` consistently for linked samples. With BAM, also provide alignment, index and source-seed BED; matched-normal analysis needs normal alignment and index.
 
 Paths in the TSV and shared JSON are resolved against their respective parent directories. Templates contain invented placeholder paths. Configure actual runtimes before with-BAM execution. Import reads no BAM and starts no algorithms. Shared background and reference settings must suit the cohort; otherwise use separate batches.
+
+For each with-BAM sample, record `source_cnvkit_version` or supply the original Suite run metadata with its CNVkit command and version. An optional shared `cnvkit_runtimes` registry maps exact versions to executable paths. `local_cnv.comparison_versions` can add further targets. Each patient’s fixed-source-filter CNVkit comparison is summarized in `local_cnv_comparator_samples.tsv`.
 
 Open `sample_reports.md` for every sample and `report.md` for cohort results. `cohort_compatibility_metrics.tsv` is the exact figure data. Primary endpoint limits are the existing multiplicity-adjusted one-sided decision limits; exploratory results use descriptive intervals only. Patients, when declared, are the independent units. Missing margins, inadequate samples and failed scientific prerequisites remain insufficient evidence. No patient data belongs in the repository.

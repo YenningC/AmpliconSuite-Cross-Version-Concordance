@@ -1,6 +1,6 @@
-# 局部 CNV 候选保留的来源校准
+# 局部 CNVkit 版本对照与原候选再保留校准
 
-局部基准只回答：已有候选区域，在有限窗口内重新估算 CNV 并经过对应 AA 种子筛选后，仍有多少区段被保留。默认窗口为候选两侧各 100 kb，另加用户提供的可信背景 BED；所有窗口合并后的长度默认最多 25 Mb。所有 BAM 均要求已有索引；不会扩大为全基因组扫描。
+局部分析衡量两个量。其一是其他 CNVkit 与该样本来源版本在相同局部条件下的结果相似性；其二是来源版本在有限窗口重新计算后，能再保留多少原始候选。默认窗口为候选两侧各 100 kb，另加用户提供的可信背景 BED；所有窗口合并后的长度默认最多 25 Mb。所有 BAM 均要求已有索引；不会扩大为全基因组扫描。
 
 `local_cnv.reference_mode` 默认 `matched_normal`，要求配对正常 BAM。只有肿瘤 BAM 时，可以**明确**配置 `flat`：程序使用原生 `cnvkit reference -t <有限 targets> -f <FASTA>` 构建平坦参考，不读取正常样本，也不静默切换参考策略。两种策略仍都要求可靠背景 BED。`flat` 不是正常样本，不能声称完全复现原来的正常参考/归一化；未经同策略校准时保持 `unverified`。策略写入每条结果、provenance 和缓存身份，切换策略会重新计算。
 
@@ -10,7 +10,58 @@ CNVkit 原生 coverage、reference、fix、CBS segment 计算保留；WGS 风格
 
 `builtin_cnvkit_map.json` 来自锁定 Suite 源码中的容器构建配方。1.5.2 及以前的七个版本对应 CNVkit 0.9.10，1.5.3 和三个 1.6.x 版本对应 0.9.13。程序核查实际 CNVkit 版本和导入源码。0.9.14 等受控版本记录为 `controlled_cnvkit`，报告保留其观察结果和实验范围。
 
-## 何时能校准
+## 0.4.2 的同版本局部标准
+
+对于每个样本，程序首先识别原 CNVkit 版本。原生 Suite 结果可通过 `source_result.result_dir` 或 `run_dir` 下单份 `*_run_metadata.json` 提供。程序在该文件记录有效 `cnvkit_cmd` 时读取精确的 `cnvkit_version`，并核对其中已记录的 Suite 版本及 build。也可以用样本级 `source_cnvkit_version` 声明原版本。两者冲突、多份元数据有歧义或版本未知时，保留缺失原因。`source_cnvkit_evidence` 记录版本依据。Suite 的构建配方可用于规划目标面板；历史输入使用的实际 CNVkit 由原始记录或样本声明指定。
+
+例如样本来自 Suite 1.6.1，原运行使用 CNVkit 0.9.14。局部标准为 0.9.14。若所选 Suite 涵盖 0.9.10、0.9.13，则这两版自动成为目标。若面板仅含配方 0.9.13，仍可在 `comparison_versions` 显式加入 0.9.10。版本不同的样本各用自己的标准。下列字段合并到已有的单样本或批量共享 JSON，路径替换为本机已安装的精确版本。示例中的 0.9.13 由既有 Suite 运行环境提供。
+
+```json
+{
+  "cnvkit_runtimes": [
+    {"version": "0.9.14", "python": "/env/cnv014/bin/python", "script": "/env/cnv014/bin/cnvkit.py"},
+    {"version": "0.9.10", "python": "/env/cnv010/bin/python", "script": "/env/cnv010/bin/cnvkit.py"}
+  ],
+  "local_cnv": {
+    "reference_mode": "matched_normal",
+    "background_bed": "/resources/verified_background.bed",
+    "comparison_versions": ["0.9.10"]
+  }
+}
+```
+
+- **登记环境。** `cnvkit_runtimes` 是按精确版本索引的环境列表，每版一条，可提供 `extra_path` 和字符串映射 `env`。程序优先采用该版的显式登记，也可复用已配置的相应 Suite 环境。存在多个不同可选环境时，显式登记可以消除歧义。实际运行还要核对探针版本和组件身份。
+- **选择目标。** `local_cnv.comparison_versions` 是可选的额外精确版本号列表，与原标准和所选 Suite 对应的 CNVkit 去重合并；仅登记环境本身不会将它加入目标。某版对应多套 Suite 时，`target_suite_versions` 列出这些 Suite，保留一份局部对照。单独指定的版本可没有对应的 Suite 标签。
+- **控制计算条件。** 用同一样本的原始候选、邻近窗口、背景、肿瘤/正常输入、参考策略和筛种条件。每版均应用来源 Suite 的同一 AA 筛种器。输入、窗口与筛种器记录形成局部设计标识。存在已核实且条件相符的来源原生作业时可复用。没有精确环境时保留缺失状态。
+- **阅读结果。** `local_cnv_comparator_seeds.tsv` 可以核查每个候选双方保留状态、覆盖比例、实测坐标及原因。`local_cnv_comparator_samples.tsv` 的 `baseline_retained_count/baseline_evaluable_count` 和 `target_retained_count/target_evaluable_count` 分别描述相对原候选的保留数。对双方可配对候选计算 `extra_count` 和 `missed_count`，方向是目标相对标准。完整面板的 `retention_delta` 为（额外数 − 遗漏数）/ 可配对数。`interval_jaccard` 为原候选内两个最终区段并集的交集长度/并集长度，多个候选重叠的碱基只计一次。双方都空时 Jaccard 留空；只有部分候选能配对时单列 `observed_*`。自身版本比较标为 `identity_anchor`。
+- **整组结果。** `local_cnv_comparator_cohort.tsv` 按来源 Suite、来源 CNVkit、目标 CNVkit、build 和正常参考策略分层，给出逐样本/逐患者等权均值、独立单位数及描述性双侧区间。单例观察和这一组探索性指标用于解释版本差异。正式 Suite 兼容判定仍使用预设端点、重复性和原始来源校准门槛。
+
+`results_only` 显示 `not_applicable_results_only`。旧运行缺少这套固定筛种器与局部标准的记录，重绘时显示 `not_recorded_in_run`。获取该终点需新增一次受限 `with_bam` 运行。
+
+<a id="synthetic-control-fixture"></a>
+
+## 生成人工配对 BAM 并接入自己的环境
+
+从源码根目录使用已安装 `pysam` 的 Python，提供一个尚不存在的目录。脚本随项目按 MIT 许可发布。它只写测试输入，耗时主要是生成两份 BAM 及索引。[生成脚本](../scripts/prepare_synthetic_cnv_control.py) · [许可](../LICENSE)
+
+```sh
+python scripts/prepare_synthetic_cnv_control.py --out ./SYNTHETIC_CNV_control
+```
+
+输出目录中的 `fixture.json` 是带有 `SYNTHETIC_ONLY` 标签的文件清单。所有路径都相对于该清单所在目录。两条 15 Mb 的人工染色体采用重复 ACGT 序列，`hg19` 仅作为 AA 识别的目录标签。肿瘤和配对正常 BAM 分别含 154,314 和 149,980 条人工比对记录，肿瘤在 chr1 的一个局部区段增加了覆盖。清单还列出候选 BED（chr1:5,100,000–5,210,000，起点从 0 计、终点不含）、两个背景区段、FASTA 和 AA 资源目录。
+
+要把这些输入接入现有的 `with_bam` 测试配置，请用清单中的文件替换下表字段。把路径转换为绝对路径，或改写成相对于**运行清单**的路径。保留原有的 Suite 运行环境和与该人工数据对应的 `source_result` 配置；生成器只提供上游测试输入，完整 CLI 另需来源 AA/AC 结果。给运行清单加上顶层 `"synthetic": true`。
+
+| `fixture.json` 字段 | `with_bam` 运行清单字段 |
+|---|---|
+| `tumor_bam`、`tumor_index` | 样本的 `alignment`、`index` |
+| `normal_bam`、`normal_index`、`seeds_bed` | 样本的 `normal_alignment`、`normal_index`、`seeds_bed` |
+| `build_label`、`fasta`、`aa_data_repo` | `reference.build`、`reference.fasta`、`reference.aa_data_repo`；样本的 `reference_build` 同为 `hg19` |
+| `background_bed` | `local_cnv.background_bed` |
+
+本次人工对照将 `suite-1.6.1` 设为来源 Suite、`0.9.14` 声明为人工样本的来源 CNVkit；Suite 1.6.1 和固定参考 Suite 1.6.2 的原生配方均为 0.9.13。按上文环境登记示例提供 0.9.14、0.9.13、0.9.10 的实际解释器、入口及各自的 R/DNAcopy 依赖，并将 0.9.10 加入 `comparison_versions`。局部条件为 `reference_mode=matched_normal`、`flank_bp=100000`、`bin_size=1000`、`max_window_bp=2000000`、`min_seed_overlap=1.0`、`cngain=4.5`、`cnsize_min=50000`。该单候选实验适合检查实际组件调用、区段比较和来源版本对齐；评估临床样本条件仍需相应样本及预先规定的判定指标。
+
+## 原始候选何时能通过校准
 
 需要保留原始运行时的输入和输出身份记录，以及原始 CNS、最终候选 BED。仅声明 Suite/CNVkit 版本、设置 `calibrated=true`，或者事后给现有文件计算指纹，都不会构成原运行的可追溯证据。来源的 `reference_mode` 也要一致；来源未记录时仅允许按带有正常 BAM 身份证据的 `matched_normal` 处理，不能据此校准 `flat`。
 

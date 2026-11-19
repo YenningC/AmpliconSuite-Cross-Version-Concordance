@@ -1,5 +1,20 @@
 # Validation status
 
+## 0.4.2 local CNVkit version controls
+
+The source-matched comparison was exercised with an artificial tumor and matched normal, one 110 kb candidate and a measured background of 800 kb. CNVkit 0.9.14 supplied the local standard. Native CNVkit 0.9.10, 0.9.13 and 0.9.14 ran with the same source Suite 1.6.1 / AA 1.6.r1 seed filter. Each version retained the full candidate. Both cross-version comparisons yielded interval Jaccard 1 and retention difference 0. The original-candidate calibration remained unverified because the fixture had no original-run identity evidence. This validates the positive software path on one artificial case. [Synthetic control results](validation/local_cnv_versions.synthetic.json)
+
+The public `with_bam` CLI was also exercised with both Suite 1.6.1 and 1.6.2 using the locked 0.9.13 recipe. The original 0.9.14 environment was registered independently, and 0.9.10 was an extra comparison. The program reused the measured native source job for 0.9.13, ran the independent standard and extra version, and produced sample and cohort figures. AA/AC completed for both selected Suite versions.
+
+Regression cases also cover missing version environments, a declared version conflicting with the original execution record, partially evaluable panels, empty intervals in both versions, patient grouping and integrity checks on replay.
+
+
+## 0.4.1 similarity and bounded AA update
+
+The new tests cover local final seed overlap, retained candidate counts, complete versus missing classes/coordinates, patient grouping, result-only replay, and AA interval evidence independent of AC features. The CNV control script checks existing CNR/CNS tables on mutually observed bases.
+
+Four locked historical Suite entries (1.2.2, 1.3.3, 1.3.4 and 1.3.7, with three distinct AA source revisions) were run on **synthetic BAM**. Each entry ran its native seed filter and two pairs of AA attempts (background only, and a nonempty fixed seed with FULL/EXPLORE). On the nonempty panel with active downsampling and a fixed Python hash seed, reusing native coverage statistics saved approximately 20–21% of unique queried bases; graph and cycles files were byte-identical within each cold/reuse pair. These figures describe the artificial fixture. Historical AA patient completion under the 100 Mb cap remains to be measured. [Recorded native measurements](validation/legacy_aa_background.synthetic.json)
+
 ## 0.4.0 batch and cohort update
 
 Local regression discovered **258 tests: 257 passed, one optional external-CNVkit integration skipped**. The new public TSV importer was exercised through `import-samples`, `check`, and `run` on three explicitly synthetic samples. A deliberately invalid middle sample remains recorded while the last sample is analyzed. Interruptions, completed-result preservation and manifest identity rejection were tested through the public CLI.

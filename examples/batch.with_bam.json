@@ -8,6 +8,9 @@
     "aa_data_repo": "/resources/AA_DATA_REPO"
   },
   "runtimes": [],
+  "cnvkit_runtimes": [
+    {"version": "0.9.14", "python": "/env/cnvkit-0.9.14/bin/python", "script": "/env/cnvkit-0.9.14/bin/cnvkit.py"}
+  ],
   "threads": 1,
   "local_cnv": {
     "reference_mode": "matched_normal",

@@ -5,6 +5,7 @@ sandbox for arbitrary hostile programs. No BAM copying, indexing, hashing in
 full, whole-contig read requests, or unbounded read iteration is allowed.
 """
 import argparse
+from bisect import bisect_left
 import atexit
 import json
 import os
@@ -78,20 +79,29 @@ def install_guard(policy, audit_path=None):
             reject('Single-region budget exceeded')
         if state['requested_bp'] + size > limits['max_total_fetch_bp']:
             reject('Cumulative region budget exceeded; result must be incomplete')
-        previous = visited.get(chrom, [])
-        merged = []
-        for a, b in sorted(previous + [(start, end)]):
-            if merged and a <= merged[-1][1]:
-                merged[-1] = (merged[-1][0], max(merged[-1][1], b))
-            else:
-                merged.append((a, b))
-        unique = state['unique_requested_bp'] - sum(b-a for a,b in previous) + sum(b-a for a,b in merged)
-        # Even many individually bounded requests must not tile the genome.
+        previous = visited.setdefault(chrom, [])
+        first = bisect_left(previous, (start,))
+        if first and previous[first - 1][1] >= start:
+            first -= 1
+        last = first
+        left, right, replaced_bp = start, end, 0
+        while last < len(previous) and previous[last][0] <= right:
+            a, b = previous[last]
+            left, right = min(left, a), max(right, b)
+            replaced_bp += b - a
+            last += 1
+        new_bp = right - left - replaced_bp
+        unique = state['unique_requested_bp'] + new_bp
         unique_limit = min(int(policy.get('max_unique_bp', 100000000)), 100000000,
                            max(1, int(.9 * sum(lengths.values()))))
+        state['effective_max_unique_bp'] = unique_limit
         if unique > unique_limit:
+            state['first_rejected_unique_request'] = state.get('first_rejected_unique_request',
+                dict(chrom=chrom, start=start, end=end, new_unique_bp=new_bp,
+                     projected_unique_bp=unique, accepted_unique_bp=state['unique_requested_bp'],
+                     limit_bp=unique_limit))
             reject('Unique genomic coverage budget exceeded; genome tiling is prohibited')
-        visited[chrom] = merged
+        previous[first:last] = [(left, right)]
         state['unique_requested_bp'] = unique
         state['queries'] += 1
         state['requested_bp'] += size
@@ -111,6 +121,9 @@ def install_guard(policy, audit_path=None):
                 reject('Alignment writes and CRAM conversion are disabled')
             kwargs['index_filename'] = alignments[p]
             self._file = original(p, mode, *args, **kwargs)
+            # Present the approved caller's alias for historical AA cache matching;
+            # I/O and the index always use validated canonical paths.
+            self.filename = os.fsencode(os.path.abspath(os.fsdecode(filename)))
             if not self._file.has_index():
                 reject('BAM index cannot be read')
             self._lengths = dict(zip(self._file.references, self._file.lengths))
