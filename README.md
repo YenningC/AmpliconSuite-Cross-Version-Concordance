@@ -2,7 +2,7 @@
 
 **Assess how AmpliconSuite results change across versions at selected regions.**
 
-[中文说明](README.zh-CN.md) · [Examples](examples) · [Environment setup](docs/environment_setup.md) · [Statistical methods](docs/statistical_methods.md)
+[中文说明](README.zh-CN.md) · [Examples](examples) · [Environment setup](docs/environment_setup.md) · [Statistical methods](docs/statistical_methods.md) · [Changelog](#changelog)
 
 AmpliconSuite Cross-Version Concordance is an independent, local research tool. It compares existing AmpliconSuite outputs, orchestrates selected-seed AA/AC runs, and evaluates whether known candidate seeds remain selected after local CNVkit reassessment. It produces per-sample similarity ladders, paired difference tables and compatibility reports.
 
@@ -185,6 +185,21 @@ Execution failures, missing files and unsupported classes remain distinct from t
 | `provenance.json`, `input_identity.json`, `runtime_check.json`, `versions.lock.json`, `run_metadata.tsv` | Actual versions, parameters, input/resource identities and execution metadata |
 
 Repeat the same `run` command to resume. Successful caches are checked against raw output hashes and reparsed; changed inputs, code identities, dependencies or parameters prevent inappropriate reuse. Changed manifests require a new output directory. BAM identities use three 64 KiB samples and file metadata; they do not certify whole-file integrity.
+
+## Changelog
+
+| Version | Main changes |
+|---|---|
+| 0.4.2 | Use the sample’s original CNVkit version as the local baseline. Report seed retention, gains, losses and interval overlap. Bundle CNVkit 0.9.14 in the Linux image. |
+| 0.4.1 | Add per-sample result summaries for seed retention, AA and AC interval overlap, and label agreement. Reuse verified background statistics for eligible older AA versions. |
+| 0.4.0 | Import batches from a TSV sample sheet. Add an index of sample reports, cohort compatibility plots and progress tracking. |
+| 0.3.2 | Adopt the MIT license and enable regenerating reports from verified 0.3.1 results. |
+| 0.3.1 | Rename the project to AmpliconSuite Cross-Version Concordance and introduce the `asconcordance` command. |
+| 0.3.0 | Add Suite 1.5.3 to the version panel. Add patient grouping, paired effect estimates and independent source calibration. |
+| 0.2.0 | Introduce local CNVkit and fixed-seed AA/AC comparisons with BAM, plus comparisons of existing results without BAM. |
+| 0.1.0 | Initial prototype for running several Suite versions and comparing their results with a fixed reference. |
+
+0.1.0 and 0.4.1 were local development milestones.
 
 ## Validation status
 

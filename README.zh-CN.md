@@ -1,6 +1,6 @@
 # AmpliconSuite Cross-Version Concordance
 
-[English](README.md) · [示例输入](examples) · [服务器步骤](docs/server_quickstart.md) · [统计方法](docs/statistical_methods.md)
+[English](README.md) · [示例输入](examples) · [服务器步骤](docs/server_quickstart.md) · [统计方法](docs/statistical_methods.md) · [更新日志](#更新日志)
 
 **以有限计算比较不同版本的扩增结果，输出逐样本天梯图和有明确证据边界的兼容性报告。**
 
@@ -155,6 +155,21 @@ asconcordance run --manifest batch.manifest.json --out runs/batch01
 | 各类provenance、版本锁和 `run_metadata.tsv` | 输入身份、资源、实际组件和参数 |
 
 重复同一run命令可续跑。缓存先核对原输出、实际源码/依赖和参数，再重新解析，不直接相信缓存标签。改变清单需新输出目录。BAM采用首、中、尾三段64KiB抽样指纹，不声称全文件完整性校验。
+
+## 更新日志
+
+| 版本 | 主要变化 |
+|---|---|
+| 0.4.2 | 以样本原用的 CNVkit 版本作局部对照，报告种子保留、新增、遗漏和区段重叠。Linux 镜像加入 CNVkit 0.9.14。 |
+| 0.4.1 | 新增逐样本结果摘要，列出种子保留比例、AA 与 AC 的区段相似度和标签一致率。符合条件的旧版 AA 可复用已核验的背景统计。 |
+| 0.4.0 | 支持用 TSV 样本表批量导入。新增逐样本报告索引、整组兼容性图和进度记录。 |
+| 0.3.2 | 采用 MIT 许可证，并支持从校验通过的 0.3.1 结果重绘报告。 |
+| 0.3.1 | 项目改名为 AmpliconSuite Cross-Version Concordance，命令改为 `asconcordance`。 |
+| 0.3.0 | 版本面板加入 Suite 1.5.3。新增患者分组、配对差异估计和独立来源校准。 |
+| 0.2.0 | 有 BAM 时支持局部 CNVkit 和固定种子 AA/AC 对比。无 BAM 时可比较已有结果。 |
+| 0.1.0 | 初版原型，可运行多个 Suite 版本，并与固定参考版本比较结果。 |
+
+0.1.0 和 0.4.1 为本地开发版本。
 
 ## 验证状态
 
