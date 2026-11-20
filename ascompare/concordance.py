@@ -632,6 +632,16 @@ def _run_locked(config, lock, entries, out, check_only):
                 r.update(source_version=source, seed_id='__whole_result__', source_aa_version=baseline.get('source_aa_version'))
                 r['reference_scope'] = baseline.get('reference_scope', 'declared_reference_' + sample['reference_build'])
                 downstream.append(r)
+        elif not chosen:
+            reason = 'No supplied candidate regions; selected-region analysis is unevaluable'
+            sample['source_bridge_status'] = 'unverified'
+            for vid in versions:
+                upstream.append(dict(sample_id=sid, seed_id='__no_seeds__', version=vid,
+                    source_version=source, status='no_seeds', stage='seed_processing', reason=reason,
+                    comparison_eligible=False, calibration_status='unverified', cnvkit_version=None))
+                downstream.append(empty_record(sid, '__no_seeds__', vid, 'no_seeds', 'seed_processing',
+                    reason, analysis_kind='aa_ac', source_version=source, comparison_eligible=False, detected=None))
+            local_config, native_source_rows = config, []
         else:
             # The per-sample fields are top-level overrides. Copying every
             # manifest sample here would make cohort preparation quadratic.
@@ -673,41 +683,37 @@ def _run_locked(config, lock, entries, out, check_only):
                         measurement = seed_stage_measurement(upstream_attempt, upstream_rows, sample, runtime,
                                                              verified[vid], local_config)
                     else:
-                        for seed in seeds or [dict(seed_id='__no_seeds__')]:
+                        for seed in seeds:
                             upstream.append(dict(sample_id=sid, seed_id=seed['seed_id'], version=vid, source_version=source,
                                 status='unsupported', reason='AA seed-filter source/runtime could not be verified',
                                 comparison_eligible=False, calibration_status='unverified', cnvkit_version=runtime.get('cnvkit_version')))
-                    if chosen:
-                        joint = timed_call('selected_seed_downstream', run_bounded_downstream,
-                            sample, chosen, runtime, entry, verified[vid], local_config,
-                            out / 'downstream_jobs' / sid / vid, measurement,
-                            timing=dict(sample_id=sid, version=vid))
-                        aa_cache = joint.get('component_cache', {}).get('aa', {})
-                        if joint.get('run_dir'):
-                            record_native_aa(joint['run_dir'], sid, vid,
-                                role='producer_reference' if aa_cache.get('hit') else 'current_execution',
-                                producer_id=aa_cache.get('producer_run_dir', ''))
-                        if vid == source:
-                            bridge = _bridge(baseline, joint, chosen)
-                            sample['source_bridge_status'] = 'passed' if bridge and all(r['passed'] for r in bridge) else 'failed'
-                            atomic_json(out / 'source_bridge' / (sid + '.json'), bridge)
-                        for seed in chosen:
-                            downstream.append(project_record(joint, seed))
-                    else:
-                        r = empty_record(sid, '__no_seeds__', vid, 'no_seeds', 'seed_processing', 'No supplied candidates; no BAM discovery permitted')
-                        r.update(analysis_kind='aa_ac', source_version=source, comparison_eligible=False)
-                        downstream.append(r)
+                    joint = timed_call('selected_seed_downstream', run_bounded_downstream,
+                        sample, chosen, runtime, entry, verified[vid], local_config,
+                        out / 'downstream_jobs' / sid / vid, measurement,
+                        timing=dict(sample_id=sid, version=vid))
+                    aa_cache = joint.get('component_cache', {}).get('aa', {})
+                    if joint.get('run_dir'):
+                        record_native_aa(joint['run_dir'], sid, vid,
+                            role='producer_reference' if aa_cache.get('hit') else 'current_execution',
+                            producer_id=aa_cache.get('producer_run_dir', ''))
+                    if vid == source:
+                        bridge = _bridge(baseline, joint, chosen)
+                        sample['source_bridge_status'] = 'passed' if bridge and all(r['passed'] for r in bridge) else 'failed'
+                        atomic_json(out / 'source_bridge' / (sid + '.json'), bridge)
+                    for seed in chosen:
+                        downstream.append(project_record(joint, seed))
                 else:
                     if vid == source:
                         sample['source_bridge_status'] = 'unverified'
-                    for seed in seeds or [dict(seed_id='__no_seeds__')]:
+                    for seed in seeds:
                         upstream.append(dict(sample_id=sid, seed_id=seed['seed_id'], version=vid, source_version=source,
-                            status='missing' if seeds else 'no_seeds', reason='No configured runtime', comparison_eligible=False,
+                            status='missing', reason='No configured runtime', comparison_eligible=False,
                             calibration_status='unverified', cnvkit_version=None))
-                    for seed in chosen or [dict(seed_id='__no_seeds__')]:
+                    for seed in chosen:
                         r = empty_record(sid, seed['seed_id'], vid, 'missing', 'aa', 'No configured AA+AC runtime')
                         r.update(analysis_kind='aa_ac', source_version=source, comparison_eligible=False)
                         downstream.append(r)
+        if config['mode'] == 'with_bam':
             local_cnv_records.extend(timed_call('local_cnv_comparators', run_local_cnv_comparators,
                 sample, local_config, entries, runtimes, verified, native_source_rows, out,
                 timing=dict(sample_id=sid)))
@@ -780,11 +786,11 @@ def main(argv=None):
             source = Path(args.from_run).resolve() if args.from_run else out
             original = json.loads((source / 'provenance.json').read_text())
             run_version = original.get('program_version')
-            if run_version not in {PROGRAM_VERSION, '0.4.4.dev0', '0.4.3', '0.4.2', '0.4.1', '0.4.0',
+            if run_version not in {PROGRAM_VERSION, '0.4.4.dev1', '0.4.4.dev0', '0.4.3', '0.4.2', '0.4.1', '0.4.0',
                                    '0.3.0', '0.3.1', '0.3.2'}:
                 raise ValueError('Use the original program version to redraw this report, or run the manifest into a new output directory')
             names = ('downstream_records.json', 'upstream_records.json', 'config.resolved.json')
-            if run_version in {PROGRAM_VERSION, '0.4.4.dev0', '0.4.3', '0.4.2'}:
+            if run_version in {PROGRAM_VERSION, '0.4.4.dev1', '0.4.4.dev0', '0.4.3', '0.4.2'}:
                 names += ('local_cnv_comparator_records.json',)
             expected = json.loads((source / 'report_inputs.sha256.json').read_text())
             if set(expected) != set(names):

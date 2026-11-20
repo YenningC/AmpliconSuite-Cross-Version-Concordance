@@ -45,7 +45,8 @@ def write_result(out, downstream, upstream, mode, reference, synthetic, matched_
     if synthetic:
         lines += ['**人工测试数据。**', '']
     if mode == 'with_bam':
-        lines += ['## 以输入样本原用 CNVkit 为标准的局部对照', '',
+        lines += ['空种子 BED 记为“无候选，未评估”，不计入检出和一致性的分母。局部复核只覆盖提供的候选区域及其分析窗口。', '',
+                  '## 以输入样本原用 CNVkit 为标准的局部对照', '',
                   '标准版与比较版使用相同的肿瘤和参考策略、分析窗口和来源 AA 筛种器。Jaccard 衡量原候选内最终种子区段的重叠。'
                   '保留数按各版单独计数；新增与遗漏只统计成功配对的原候选，方向为比较版相对标准版。', '',
                   '| 样本 | 标准 CNVkit | 比较 CNVkit | 标准保留/可评 | 比较版保留/可评 | 配对/预期 | 区段 Jaccard | 新增/遗漏 | 来源局部复现原结果 | 比较状态 |',

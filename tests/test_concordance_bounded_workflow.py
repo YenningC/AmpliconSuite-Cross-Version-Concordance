@@ -273,13 +273,7 @@ pathlib.Path(str(prefix)+'_summary.txt').write_text('#Amplicons = 0\\n')
             run_full_suite({'versions':[]},[{'sample_id':'SYNTHETIC','status':'ok'}],{},self.root/'full_suite')
         self.assertFalse((self.root/'full_suite').exists())
 
-    def run_public_workflow(self,name='public',alter_source=False,n_samples=1):
-        if alter_source:
-            profile=next((self.source/'ac').glob('*profiles.tsv'))
-            profile.write_text(profile.read_text().replace('Cyclic\tPositive\tNone detected','Cyclic\tNone detected\tPositive'))
-            for bed in (self.source/'ac/classification_classification_bed_files').glob('*_ecDNA_1_intervals.bed'):
-                bed.rename(bed.with_name(bed.name.replace('_ecDNA_','_BFB_')))
-        manifest=self.root/(name+'.json')
+    def public_manifest(self,n_samples=1):
         sample={k:v for k,v in self.sample.items() if not k.startswith('_') and k!='seeds'}
         sample.update(seeds_bed=str(self.seedfile),source_result={'run_dir':str(self.source),
             'component_versions':{k:self.entry[k]['version'] for k in ('aa','ac')}})
@@ -290,6 +284,16 @@ pathlib.Path(str(prefix)+'_summary.txt').write_text('#Amplicons = 0\\n')
         if n_samples > 1:
             config['samples'] = [dict(copy.deepcopy(sample), sample_id=f'SYNTHETIC_BATCH_{i}',
                                       patient_id='SYNTHETIC_SHARED_PATIENT') for i in range(n_samples)]
+        return config
+
+    def run_public_workflow(self,name='public',alter_source=False,n_samples=1):
+        if alter_source:
+            profile=next((self.source/'ac').glob('*profiles.tsv'))
+            profile.write_text(profile.read_text().replace('Cyclic\tPositive\tNone detected','Cyclic\tNone detected\tPositive'))
+            for bed in (self.source/'ac/classification_classification_bed_files').glob('*_ecDNA_1_intervals.bed'):
+                bed.rename(bed.with_name(bed.name.replace('_ecDNA_','_BFB_')))
+        manifest=self.root/(name+'.json')
+        config=self.public_manifest(n_samples=n_samples)
         atomic_json(manifest,config);config,lock,entries=load_manifest(manifest)
         inputs=[self.bam,Path(str(self.bam)+'.bai'),self.normal,Path(str(self.normal)+'.bai'),self.seedfile]
         inputs += [p for p in self.source.rglob('*') if p.is_file()]
@@ -308,6 +312,58 @@ pathlib.Path(str(prefix)+'_summary.txt').write_text('#Amplicons = 0\\n')
             result=run_concordance(config,lock,entries,self.root/name)
         self.assertEqual(before,{str(p):digest(p) for p in inputs})
         return result,self.root/name
+
+    def test_empty_seed_bed_is_unevaluable_without_component_probes(self):
+        self.seedfile.write_text('# Valid empty candidate BED\n')
+        manifest = self.root / 'empty_candidates.json'
+        for configured in (False, True):
+            with self.subTest(configured=configured):
+                config = self.public_manifest()
+                config['samples'][0]['source_cnvkit_version'] = '0.9.13'
+                if not configured:
+                    config['runtimes'] = []
+                atomic_json(manifest, config)
+                config, lock, entries = load_manifest(manifest)
+                out = self.root / f'empty_candidates_{configured}'
+                with patch('ascompare.concordance.verify_runtime', return_value={'ready': False}) as probe, \
+                     patch('ascompare.concordance_cnv._run_tool') as cnv, \
+                     patch('ascompare.concordance.run_bounded_downstream') as downstream:
+                    result = run_concordance(config, lock, entries, out)
+                probe.assert_not_called()
+                cnv.assert_not_called()
+                downstream.assert_not_called()
+                self.assertEqual(self.trace(), [])
+                for name in ('upstream_records', 'downstream_records', 'local_cnv_comparator_records'):
+                    records = json.loads((out / (name + '.json')).read_text())
+                    self.assertTrue(records, name)
+                    self.assertTrue(all(r['status'] == 'no_seeds' and r['seed_id'] == '__no_seeds__'
+                                        and not r['comparison_eligible'] for r in records), name)
+                self.assertTrue(result['compatibility_combined'])
+                self.assertTrue(all(r['decision'] == 'insufficient_evidence'
+                                    for r in result['compatibility_combined']))
+                self.assertTrue((out / 'report.md').is_file())
+                with (out / 'result.tsv').open() as handle:
+                    rows = list(csv.DictReader(handle, delimiter='\t'))
+                self.assertTrue(rows)
+                self.assertTrue(all(r['n_expected_units'] == r['n_evaluable_units'] == '0' for r in rows))
+
+    def test_missing_seed_bed_is_an_input_error_not_no_seeds(self):
+        self.seedfile.unlink()
+        manifest = self.root / 'missing_seed_bed.json'
+        atomic_json(manifest, self.public_manifest())
+        config, lock, entries = load_manifest(manifest)
+        out = self.root / 'missing_seed_bed'
+        with patch('ascompare.concordance.verify_runtime') as probe, \
+             patch('ascompare.concordance.run_bounded_downstream') as downstream:
+            run_concordance(config, lock, entries, out)
+        probe.assert_not_called()
+        downstream.assert_not_called()
+        records = json.loads((out / 'downstream_records.json').read_text())
+        self.assertTrue(records)
+        self.assertTrue(all(r['status'] == 'failed' and r['stage'] == 'input_check'
+                            and not r['comparison_eligible'] for r in records))
+        self.assertIn(self.seedfile.name, records[0]['reason'])
+        self.assertTrue((out / 'report.md').is_file())
 
     def test_two_sample_with_bam_batch_runs_serially_and_keeps_one_patient_independent(self):
         result, out = self.run_public_workflow(name='synthetic_batch', n_samples=2)

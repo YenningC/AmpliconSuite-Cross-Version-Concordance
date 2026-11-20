@@ -146,6 +146,7 @@ def run_local_cnv_comparators(sample, config, entries, runtimes, verified, nativ
     source_available = False
     panel = comparison_panel(sample, config)
     output = []
+    seeds = sample.get('seeds', [])
     for version, suites in panel.items():
         standard = version == source_cnv
         meta = dict(source_cnvkit_version=source_cnv, cnvkit_version=version, sample_id=sid, source_version=source,
@@ -155,6 +156,11 @@ def run_local_cnv_comparators(sample, config, entries, runtimes, verified, nativ
                     measurement_origin='unavailable', local_design_id=None, actual_cnvkit_version=None)
         problem = sample.get('_input_failed') or sample.get('_source_cnvkit_issue')
         status, stage = ('failed', 'input_check') if sample.get('_input_failed') else ('unsupported', 'version_check')
+        if not seeds and not sample.get('_input_failed'):
+            output.append(dict(meta, seed={}, seed_id='__no_seeds__', status='no_seeds',
+                               stage='seed_processing', reason='No supplied candidate regions',
+                               comparison_eligible=False))
+            continue
         if not is_exact_version(version):
             problem = problem or 'invalid_target_CNVkit_version'
         if not source_cnv:
@@ -171,9 +177,6 @@ def run_local_cnv_comparators(sample, config, entries, runtimes, verified, nativ
                  and tool == _configured_tool(source_runtime))
         if not problem and not standard and not source_available and not reuse:
             problem, stage = 'source_local_standard_unavailable', 'source_control'
-        seeds = sample.get('seeds', [])
-        if not problem and not seeds:
-            problem, status, stage = 'No original candidate seeds', 'no_seeds', 'input_check'
         if problem:
             for seed in seeds or [{}]:
                 output.append(dict(meta, seed=seed, seed_id=seed.get('seed_id', '__no_seeds__'),

@@ -1,5 +1,9 @@
 # Validation status
 
+## 0.4.4.dev2 empty candidate controls
+
+A valid empty BED produces no-seed records for native Suite comparisons, fixed-source CNVkit comparisons and AA/AC comparisons, even when the component runtime is unavailable. The installed CLI produced a complete report for an explicitly artificial empty BED with unavailable AA. No runtime probes or scientific subprocesses ran. Descriptive expected and evaluable seed counts were both zero, and the compatibility table reported insufficient evidence. A separate regression kept a missing BED file as an input error.
+
 ## 0.4.4.dev1 coverage-statistics checks
 
 The wrapper checks whether the locked AA reader can accept a verified seed-stage measurement. The paired-read support stored by the upstream stage is preserved. When native AA recomputes coverage, audited and structurally valid reconstruction can proceed to AC. Lack of a reuse marker is recorded as an unverified reuse outcome.

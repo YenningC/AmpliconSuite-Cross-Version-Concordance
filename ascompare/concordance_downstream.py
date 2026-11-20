@@ -200,7 +200,8 @@ def _sample_similarity(rows):
             "comparator_roles", "analysis_kind", "sample_id", "identity_anchor")
     result = {key: first[key] for key in keys}
     valid = [row for row in rows if row["evaluable"]]
-    result.update(n_expected_units=len(rows), n_evaluable_units=len(valid),
+    result.update(n_expected_units=sum(row["seed_id"] != "__no_seeds__" for row in rows),
+                  n_evaluable_units=len(valid),
                   n_signal_units=sum(row["signal_positive"] for row in rows),
                   n_both_negative_units=sum(not row["signal_positive"] for row in valid),
                   target_statuses=sorted({row["target_status"] for row in rows}),
