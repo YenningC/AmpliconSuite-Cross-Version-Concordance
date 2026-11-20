@@ -278,6 +278,19 @@ print('SYNTHETIC classification complete')
 
     def calls(self):return self.counter.read_text().splitlines() if self.counter.exists() else []
 
+    def test_suite_defaults_reclassify_inherited_graph_without_threshold_overrides(self):
+        self.config.pop('ac_parameters')
+        self.config['parameter_policy'] = 'suite_defaults'
+        result = self.run_cached()
+        self.assertEqual(result['status'], 'ok', result.get('reason'))
+        attempt = Path(result['run_dir'])
+        execution = json.loads((attempt/'execution.json').read_text())
+        self.assertEqual(execution['parameter_policy'], 'suite_defaults')
+        self.assertNotIn('--min_size', execution['argv'])
+        self.assertNotIn('--min_flow', execution['argv'])
+        self.assertTrue(self.run_cached()['cache_hit'])
+        self.assertEqual(self.calls(), ['CLASSIFY'])
+
     def test_actual_runtime_probe_and_resume_reparse_ignore_normalized_tampering(self):
         first=self.run_cached();self.assertEqual(first['status'],'ok',first.get('reason'));self.assertFalse(first['cache_hit'])
         self.assertEqual(self.calls(),['CLASSIFY'])

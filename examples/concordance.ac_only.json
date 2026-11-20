@@ -1,5 +1,6 @@
 {
   "mode": "results_only",
+  "parameter_policy": "suite_defaults",
   "reference_version": "suite-1.6.2", "target_versions": ["suite-1.6.0", "suite-1.6.2"],
   "reference": {"build": "hg19", "aa_data_repo": "/resources/AA_DATA_REPO"},
   "samples": [{
@@ -9,6 +10,5 @@
   }],
   "runtimes": [{"id": "suite-1.6.2", "ac_python": "/env/ac201/bin/python",
     "ac_script": "/work/locked/AmpliconClassifier-COMMIT/amplicon_classifier.py"}],
-  "ac_parameters": {"min_size": 50000, "min_flow": 1.0},
   "statistics": {"primary_pairs": [], "min_samples": 20, "margins": {}}
 }

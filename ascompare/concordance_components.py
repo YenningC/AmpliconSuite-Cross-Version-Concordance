@@ -74,18 +74,22 @@ def run_component_downstream(sample, seeds, runtime, entry, verified, config, ou
     attempt = None
     record = None
     cache_root = Path(config.get('_component_cache_dir', out / '.component_cache'))
-    aa_env = effective_environment('aa', runtime, config['reference'])
+    parameter_policy = config.get('parameter_policy', 'custom')
+    official = parameter_policy == 'suite_defaults'
+    aa_env = effective_environment('aa', runtime, config['reference'], pin_hash_seed=not official)
     ac_env = effective_environment('ac', runtime, config['reference'])
-    hash_seed = aa_env['PYTHONHASHSEED']
+    hash_seed = aa_env.get('PYTHONHASHSEED')
     background = measurement or dict(mode='native_measurement', reason='No eligible same-version seed-stage measurement')
-    if (background['mode'] == 'same_version_seed_stage'
+    if (not official and background['mode'] == 'same_version_seed_stage'
             and any(c.isspace() for c in str(Path(sample['alignment']).resolve()))
             and any(c.isspace() for c in str(out.absolute()))):
         background = dict(mode='native_measurement',
             reason='BAM and working paths both contain whitespace; native AA cannot match a private cache alias')
     reuse_stats = background['mode'] == 'same_version_seed_stage'
     try:
-        if not re.fullmatch(r'[0-9]{1,10}', hash_seed) or int(hash_seed) > 4294967295:
+        fixed_hash = bool(hash_seed and re.fullmatch(r'[0-9]{1,10}', hash_seed)
+                          and int(hash_seed) <= 4294967295)
+        if not official and not fixed_hash:
             raise ValueError('Bounded AA requires a numeric PYTHONHASHSEED between 0 and 4294967295 for reproducible downsampling')
         # Launch/source verification is mandatory even when every output is cached.
         if not verified.get('ready'):
@@ -114,7 +118,8 @@ def run_component_downstream(sample, seeds, runtime, entry, verified, config, ou
                     validated_values(Path(background['path']), Path(sample['alignment']).resolve()) != background.get('fields')):
                 raise ValueError('Native AA measurement changed after the seed stage')
         params = config.get('aa_parameters', {})
-        runmode = params.get('runmode', 'CYCLES')
+        runmode = 'FULL' if official else params.get('runmode', 'CYCLES')
+        downsample = 10 if official else params.get('downsample', -1)
         if runmode not in {'CYCLES', 'FULL'}:
             raise ValueError('AA runmode must be CYCLES or FULL')
         aa_identity = dict(component=component_identity('aa', runtime, entry, verified, aa_env),
@@ -124,15 +129,21 @@ def run_component_downstream(sample, seeds, runtime, entry, verified, config, ou
                                 if r.get('kind') != 'local_cnv_background_bed'],
             build=sample['reference_build'], policy=policy,
             background=dict(mode=background['mode'], raw_stats_sha256=background.get('sha256')),
-            parameters=dict(downsample=params.get('downsample', -1), runmode=runmode, extendmode='EXPLORE'),
+            parameters=dict(policy=parameter_policy, downsample=downsample, runmode=runmode, extendmode='EXPLORE'),
             executor_sha256=digest(__file__),
             policy_executor_sha256=digest(Path(__file__).with_name('concordance_policy.py')),
             stats_handoff_sha256=digest(Path(__file__).with_name('concordance_aa_stats.py')))
         aa_identity['output_validator_sha256'] = digest(Path(__file__).with_name('parsing.py'))
+        if official and not fixed_hash:
+            # A fresh interpreter may choose another read subset. Resume the
+            # same completed Suite job but avoid substitution across jobs.
+            aa_identity['unseeded_job_scope'] = str(out.resolve())
         aa_key = cache.signature(aa_identity)
         ac_component = component_identity('ac', runtime, entry, verified, ac_env)
+        from .concordance_import import ac_cli_flags
+        ac_flags = ac_cli_flags(config, vid)
         complete_signature = cache.signature(dict(aa=aa_key, ac=ac_component,
-            ac_parameters=config.get('ac_parameters', {}),
+            ac_flags=ac_flags,
             ac_input_writer_sha256=digest(Path(__file__).with_name('runner.py')),
             parser_sha256=digest(Path(__file__).with_name('parsing.py'))))
         # Preserve the existing attempt path on an unchanged, fully valid resume.
@@ -184,16 +195,17 @@ def run_component_downstream(sample, seeds, runtime, entry, verified, config, ou
                 aaargs = ['--bam', sample['alignment'], '--bed', str(bed),
                     '--out', str(attempt / 'aa' / 'reconstruction'), '--ref', sample['reference_build'],
                     '--runmode', runmode, '--extendmode', 'EXPLORE',
-                    '--downsample', str(params.get('downsample', -1))]
+                    '--downsample', str(downsample)]
                 help_text = verified.get('aa', {}).get('help', '')
                 evidence = {k: v for k, v in background.items() if k != 'fields'}
                 evidence.update(original_bam=sample['alignment'], reuse_confirmed=False,
                                 python_hash_seed=hash_seed)
                 if reuse_stats:
-                    aaargs[1] = api.stage_measurement(background, attempt, sample['alignment'])
+                    aaargs[1] = api.stage_measurement(background, attempt, sample['alignment'],
+                                                      allow_alias=not official)
                     evidence.update(reader_bam_path=aaargs[1],
                         staged_sha256=digest(attempt / 'reference' / 'coverage.stats'))
-                elif '--no_cstats' in help_text:
+                elif not official and '--no_cstats' in help_text:
                     aaargs.append('--no_cstats')
                 solver = aa_identity['component']['solver']
                 if '--solver' in help_text:
@@ -203,6 +215,8 @@ def run_component_downstream(sample, seeds, runtime, entry, verified, config, ou
                 atomic_json(attempt / 'aa_background.json', evidence)
                 command = api.guarded_command(runtime['aa_python'], runtime['aa_script'], aaargs, config['_io_policy_path'])
                 stages['aa'] = dict(status='running', argv=command, started=now(),
+                                    parameter_policy=parameter_policy,
+                                    solver_selection=verified.get('official_solver'),
                                     cache_hit=False, cache_key=aa_key, execution='subprocess')
                 atomic_json(attempt / 'stages.json', stages)
                 with measure('aa', measurement_kind='subprocess', sample_id=sid, version=vid,
@@ -223,7 +237,7 @@ def run_component_downstream(sample, seeds, runtime, entry, verified, config, ou
                         raise RuntimeError(access['blocked'][0] + '; see ' + audit.name)
                 if rc:
                     raise RuntimeError('Bounded AA failed; see aa.log')
-                if reuse_stats and not evidence['reuse_confirmed']:
+                if reuse_stats and not evidence['reuse_confirmed'] and not official:
                     raise RuntimeError('Native AA did not confirm use of its staged coverage.stats')
                 if 'Traceback (most recent call last)' in aa_log:
                     raise RuntimeError('AA logged an exception despite exit zero')
@@ -258,7 +272,7 @@ def run_component_downstream(sample, seeds, runtime, entry, verified, config, ou
                 reference=config['reference'],
                 reference_identity=[r for r in config.get('_reference_identity', [])
                                     if r.get('kind') != 'local_cnv_background_bed'],
-                parameters=config.get('ac_parameters', {}),
+                ac_flags=ac_flags,
                 input_writer_sha256=digest(Path(__file__).with_name('runner.py')),
                 parser_sha256=digest(Path(__file__).with_name('parsing.py')))
             ac_key = cache.signature(ac_identity)
@@ -275,11 +289,11 @@ def run_component_downstream(sample, seeds, runtime, entry, verified, config, ou
                     component_cache['ac'] = cache.metadata(ac_cached, True)
                     stages['ac'] = _staged(ac_cached, component_cache['ac'])
                 else:
-                    p = config.get('ac_parameters', {})
                     command = [runtime['ac_python'], runtime['ac_script'], '-i', str(inputfile),
                         '--ref', sample['reference_build'], '-o', str(attempt / 'ac' / 'classification'),
-                        '--min_size', str(p.get('min_size', 50000)), '--min_flow', str(p.get('min_flow', 1.0))]
+                        *ac_flags]
                     stages['ac'] = dict(status='running', argv=command, started=now(),
+                                        parameter_policy=parameter_policy,
                                         cache_hit=False, cache_key=ac_key, execution='subprocess')
                     atomic_json(attempt / 'stages.json', stages)
                     env = dict(ac_env, AA_DATA_REPO=str(api.local_reference(

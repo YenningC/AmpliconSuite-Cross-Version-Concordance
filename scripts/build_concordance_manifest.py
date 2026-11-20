@@ -46,7 +46,10 @@ def build(manifest, prepared, templates, cnv_runtimes, lock):
         keys = ('aa_python', 'ac_python', 'extra_path', 'env', 'dependency_overrides')
         runtime = {k: copy.deepcopy(template[k]) for k in keys if k in template}
         runtime.update({k: source[k] for k in ('id', 'aa_script', 'ac_script')})
-        runtime['solver'] = 'clarabel' if entry['aa']['version'].startswith('1.6.') else 'mosek'
+        if source.get('suite_script'):
+            runtime['suite_script'] = source['suite_script']
+        if manifest.get('parameter_policy') != 'suite_defaults':
+            runtime['solver'] = 'clarabel' if entry['aa']['version'].startswith('1.6.') else 'mosek'
         if result['mode'] == 'with_bam':
             ck = recipes[vid]['cnvkit_version']
             if ck not in registry:

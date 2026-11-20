@@ -541,6 +541,20 @@ def run_local_upstream(sample, runtime, entry, config, out):
         if not math.isfinite(threshold) or not 0 < threshold <= 1:
             raise LocalFailure('failed', 'input_check', 'min_seed_overlap must be >0 and <=1')
         base['min_seed_overlap'] = threshold
+        official_parameters = config.get('parameter_policy') == 'suite_defaults'
+        if official_parameters:
+            # Every pinned Suite parser passes these defaults to amplified_intervals.py.
+            gain, min_size = 4.5, 50000
+            for selected in (settings, config.get('full_suite', {})):
+                if (float(selected.get('cngain', gain)) != gain
+                        or float(selected.get('cnsize_min', min_size)) != min_size):
+                    raise LocalFailure('failed', 'input_check',
+                                       'suite_defaults requires cngain=4.5 and cnsize_min=50000')
+        else:
+            gain = float(settings.get('cngain', config.get('full_suite', {}).get('cngain', 4.5)))
+            min_size = int(settings.get('cnsize_min', config.get('full_suite', {}).get('cnsize_min', 50000)))
+            if not math.isfinite(gain) or gain <= 0 or min_size < 0:
+                raise LocalFailure('failed', 'input_check', 'Invalid AA seed gain/minimum size')
         mode = settings.get('reference_mode', 'matched_normal')
         if mode not in ('matched_normal', 'flat'):
             raise LocalFailure('unsupported', 'input_check', 'reference_mode must be matched_normal or explicitly flat')
@@ -573,15 +587,11 @@ def run_local_upstream(sample, runtime, entry, config, out):
         aa_env = _environment(runtime, runtime['aa_python'])
         private_ref = local_reference(config['reference']['aa_data_repo'], out / 'private_AA_DATA_REPO')
         aa_env['AA_DATA_REPO'] = str(private_ref)
-        gain = float(settings.get('cngain', config.get('full_suite', {}).get('cngain', 4.5)))
-        min_size = int(settings.get('cnsize_min', config.get('full_suite', {}).get('cnsize_min', 50000)))
-        if not math.isfinite(gain) or gain <= 0 or min_size < 0:
-            raise LocalFailure('failed', 'input_check', 'Invalid AA seed gain/minimum size')
         prefix = out / 'local_amplified'
         args = ['--ref', config['reference']['build'], '--bed', str(local_bed),
                 '--bam', str(sample['alignment']), '--gain', str(gain),
                 '--cnsize_min', str(min_size), '--out', str(prefix)]
-        if '--no_cstats' in helper.read_text():
+        if not official_parameters and '--no_cstats' in helper.read_text():
             args.append('--no_cstats')
         provenance = dict(created=now(), version=target_version, source_version=source_version, cnvkit=identity,
                           reference_mode=mode,

@@ -1,5 +1,15 @@
 # Validation status
 
+## 0.4.4 development Suite-default controls
+
+The `suite_defaults` policy was checked against all eleven locked Suite sources. It retains the default FULL/EXPLORE/10× invocation, uses the locked Suite's license check for recent solver selection and lets the native classifier supply its numerical defaults. It treats coverage-statistic recomputation as a normal native outcome when AA succeeds. A run with an inherited non-fixed Python hash seed does its own AA reconstruction per Suite, with resume restricted to the same job.
+
+The local regression suite passed 366 tests with the native CNVkit 0.9.13 integration enabled. It covers unchanged native BAM paths containing spaces, official classifier defaults in both workflows, license selection, read scope and AA background recomputation. Replaying an existing 0.4.3 synthetic report produced a byte-identical `result.tsv`.
+
+The native CLI completed AA and AC for all eleven recipes on one artificial linear fixture, with local CNVkit. Captured commands matched FULL/EXPLORE/10×, left the Python hash seed unset in the test environment and used native AC numerical defaults. [Synthetic record](validation/official_suite_defaults.synthetic.json)
+
+The selected-region workflow uses supplied seed regions and a finite case-control CNVkit design. Full-pipeline genome-wide discovery and BAM-wide QC rules are outside this validation scope.
+
 ## 0.4.3 AA execution and output controls
 
 We used the public `with_bam` CLI on an artificial tumor/normal pair with a 110 kb amplified candidate. The control used the complete eleven-recipe panel and fixed reference Suite 1.6.2. For each recipe the released 0.4.2 workflow ran its own AA in FULL/EXPLORE and its own AC. The 0.4.3 workflow used CYCLES/EXPLORE and the same seeds, filters, thresholds and resource limits. Native CNVkit, AA and AC were executed locally. This control has one Linear feature.

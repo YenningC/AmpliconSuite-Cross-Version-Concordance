@@ -6,13 +6,19 @@
 
 AmpliconSuite Cross-Version Concordance is an independent, local research tool. It compares existing AmpliconSuite outputs, orchestrates selected-seed AA/AC runs, and evaluates whether known candidate seeds remain selected after local CNVkit reassessment. It produces per-sample similarity ladders, paired difference tables and compatibility reports.
 
-**Version:** 0.4.3 · **Fixed reference:** Suite **1.6.2**, AA **1.6.r2**, AC **2.0.1**. The reference is frozen; installing a newer upstream release does not change it. This project is not an official AmpliconSuite component.
+**Version:** 0.4.4.dev0 · **Fixed reference:** Suite **1.6.2**, AA **1.6.r2**, AC **2.0.1**. The reference is frozen; installing a newer upstream release does not change it. This project is not an official AmpliconSuite component.
 
 > Similarity describes observed software outputs. It is not a probability of biological truth or proof that complete workflows are interchangeable. Compatibility remains **insufficient evidence** when margins are unspecified or evidence is inadequate.
 
+## Official Suite defaults for selected regions
+
+New manifests use `"parameter_policy": "suite_defaults"` at the top level. AA runs in FULL/EXPLORE with the Suite default 10× target depth. The official version's licensing check selects the AA solver. Concordance leaves the inherited Python hash environment in place. AC uses its native classification thresholds. Native seed-filter defaults are gain 4.5 and minimum size 50,000 bp. Successful AA reconstruction can proceed to AC when AA recomputes coverage statistics.
+
+The selected input regions, bounded local CNVkit design and 100 Mb access cap define the study scope. Genome-wide discovery and full-BAM QC are outside that scope. Remove any `aa_parameters` and `ac_parameters` overrides, and runtime solver or hash-seed overrides, when enabling this policy. Use a fresh output directory.
+
 ## Faster fixed-seed reconstruction (0.4.3)
 
-The default `with_bam` run uses AA's `CYCLES` mode with `EXPLORE`. It writes the graph, cycles and summary for classification and report generation. To also generate native AA SV figures, set `aa_parameters.runmode` to `FULL`.
+The custom-parameter policy retains the 0.4.3 default AA `CYCLES` mode with `EXPLORE`. It writes the graph, cycles and summary for classification and report generation. To also generate native AA SV figures, set `aa_parameters.runmode` to `FULL`.
 
 Matching AA reconstructions can serve multiple Suite recipes. Reuse requires the same verified AA commit, inputs, effective parameters, runtime, background and access policy. Each Suite uses its configured classifier. The per-Suite attempt records identify the producer of reused results. Use `stage_timing.tsv` for timing and cache activity. The fixed reference, seed selection, per-sample figures and cohort endpoints retain their existing definitions.
 
@@ -200,6 +206,7 @@ Repeat the same `run` command to resume. Successful caches are checked against r
 
 | Version | Main changes |
 |---|---|
+| 0.4.4 (development) | Add an official Suite parameter policy for selected-region reconstruction and classification. |
 | 0.4.3 | Time bounded stages, use CYCLES for reconstruction, cache AA and AC separately and share verified identical AA jobs across Suite recipes. |
 | 0.4.2 | Use the sample’s original CNVkit version as the local baseline. Report seed retention, gains, losses and interval overlap. Bundle CNVkit 0.9.14 in the Linux image. |
 | 0.4.1 | Add per-sample result summaries for seed retention, AA and AC interval overlap, and label agreement. Reuse verified background statistics for eligible older AA versions. |

@@ -99,7 +99,7 @@ def component_identity(component, runtime, entry, verified, environment):
     return result
 
 
-def effective_environment(component, runtime, reference):
+def effective_environment(component, runtime, reference, *, pin_hash_seed=True):
     env = dict(os.environ, **runtime.get('env', {}))
     env.update(AA_DATA_REPO=str(Path(reference['aa_data_repo']).resolve()),
                PYTHONDONTWRITEBYTECODE='1', OMP_NUM_THREADS='1', OPENBLAS_NUM_THREADS='1')
@@ -109,6 +109,6 @@ def effective_environment(component, runtime, reference):
     bins = [str(Path(runtime[name + '_python']).absolute().parent) for name in order]
     inherited_path = env.get('PATH', '') if component == 'aa' else os.environ.get('PATH', '')
     env['PATH'] = os.pathsep.join(bins + runtime.get('extra_path', []) + [inherited_path])
-    if component == 'aa':
+    if component == 'aa' and pin_hash_seed:
         env['PYTHONHASHSEED'] = env.get('PYTHONHASHSEED', '0')
     return env

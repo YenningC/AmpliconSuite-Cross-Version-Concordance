@@ -265,8 +265,11 @@ print('mosek optimization passed')'''
         probe = _run([version['aa_python'], '-c', code], runtime_env)
         result['aa_solver_probe'] = probe
         if probe['returncode']:
-            result['ready'] = False
-            result['diagnostics'].append('Historical AA requires working Mosek: ' + probe['stderr'][-1500:])
+            if version.get('_allow_native_mosek_fallback') and '--solver' in result['aa'].get('help', ''):
+                result['diagnostics'].append('Mosek probe failed; official AA can retry with Clarabel at runtime')
+            else:
+                result['ready'] = False
+                result['diagnostics'].append('Historical AA requires working Mosek: ' + probe['stderr'][-1500:])
     if lock_entry.get('bfb'):
         # RECORD detects local edits to pip-distributed Python code (not a solver test).
         code = '''import importlib.metadata as m,json,hashlib,base64,pathlib

@@ -1,0 +1,107 @@
+{
+  "synthetic": true,
+  "policy": "suite_defaults",
+  "anchor": "suite-1.6.2",
+  "successful_recipes": 11,
+  "recipes": {
+    "suite-1.6.1": {
+      "status": "ok",
+      "aa": "FULL/EXPLORE/10x",
+      "classified_with_native_defaults": true,
+      "python_hash_seed": null,
+      "ran_aa": true,
+      "ran_ac": true,
+      "native_aa_figure": true
+    },
+    "suite-1.2.2": {
+      "status": "ok",
+      "aa": "FULL/EXPLORE/10x",
+      "classified_with_native_defaults": true,
+      "python_hash_seed": null,
+      "ran_aa": true,
+      "ran_ac": true,
+      "native_aa_figure": true
+    },
+    "suite-1.3.3": {
+      "status": "ok",
+      "aa": "FULL/EXPLORE/10x",
+      "classified_with_native_defaults": true,
+      "python_hash_seed": null,
+      "ran_aa": true,
+      "ran_ac": true,
+      "native_aa_figure": true
+    },
+    "suite-1.3.4": {
+      "status": "ok",
+      "aa": "FULL/EXPLORE/10x",
+      "classified_with_native_defaults": true,
+      "python_hash_seed": null,
+      "ran_aa": true,
+      "ran_ac": true,
+      "native_aa_figure": true
+    },
+    "suite-1.3.7": {
+      "status": "ok",
+      "aa": "FULL/EXPLORE/10x",
+      "classified_with_native_defaults": true,
+      "python_hash_seed": null,
+      "ran_aa": true,
+      "ran_ac": true,
+      "native_aa_figure": true
+    },
+    "suite-1.4.0": {
+      "status": "ok",
+      "aa": "FULL/EXPLORE/10x",
+      "classified_with_native_defaults": true,
+      "python_hash_seed": null,
+      "ran_aa": true,
+      "ran_ac": true,
+      "native_aa_figure": true
+    },
+    "suite-1.5.0": {
+      "status": "ok",
+      "aa": "FULL/EXPLORE/10x",
+      "classified_with_native_defaults": true,
+      "python_hash_seed": null,
+      "ran_aa": true,
+      "ran_ac": true,
+      "native_aa_figure": true
+    },
+    "suite-1.5.2": {
+      "status": "ok",
+      "aa": "FULL/EXPLORE/10x",
+      "classified_with_native_defaults": true,
+      "python_hash_seed": null,
+      "ran_aa": true,
+      "ran_ac": true,
+      "native_aa_figure": true
+    },
+    "suite-1.5.3": {
+      "status": "ok",
+      "aa": "FULL/EXPLORE/10x",
+      "classified_with_native_defaults": true,
+      "python_hash_seed": null,
+      "ran_aa": true,
+      "ran_ac": true,
+      "native_aa_figure": true
+    },
+    "suite-1.6.0": {
+      "status": "ok",
+      "aa": "FULL/EXPLORE/10x",
+      "classified_with_native_defaults": true,
+      "python_hash_seed": null,
+      "ran_aa": true,
+      "ran_ac": true,
+      "native_aa_figure": true
+    },
+    "suite-1.6.2": {
+      "status": "ok",
+      "aa": "FULL/EXPLORE/10x",
+      "classified_with_native_defaults": true,
+      "python_hash_seed": null,
+      "ran_aa": true,
+      "ran_ac": true,
+      "native_aa_figure": true
+    }
+  }
+}

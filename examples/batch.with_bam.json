@@ -1,5 +1,6 @@
 {
   "mode": "with_bam",
+  "parameter_policy": "suite_defaults",
   "reference_version": "suite-1.6.2",
   "target_versions": ["suite-1.6.0", "suite-1.6.1", "suite-1.6.2"],
   "reference": {
@@ -23,8 +24,6 @@
     "cnsize_min": 50000
   },
   "sampling": {"max_seeds": 10, "random_seed": 20261117},
-  "aa_parameters": {"downsample": -1, "runmode": "CYCLES"},
-  "ac_parameters": {"min_size": 50000, "min_flow": 1.0},
   "io_policy": {
     "max_fetch_bp": 50000000,
     "max_total_fetch_bp": 500000000,

@@ -203,9 +203,24 @@ def load_manifest(path):
         raise ValueError('local_cnv.comparison_versions requires a list of exact CNVkit versions')
     if config.get('threads', 1) != 1:
         raise ValueError('The bounded concordance currently executes serially')
+    parameter_policy = config.get('parameter_policy', 'custom')
+    if parameter_policy not in ('suite_defaults', 'custom'):
+        raise ValueError('parameter_policy must be suite_defaults or custom')
     for key, allowed in (('aa_parameters', {'downsample', 'runmode'}), ('ac_parameters', {'min_size', 'min_flow'})):
         if not isinstance(config.get(key, {}), dict) or set(config.get(key, {})) - allowed:
             raise ValueError('Unsupported parameters in ' + key + '; no parameters are silently ignored')
+    if parameter_policy == 'suite_defaults':
+        if config.get('aa_parameters') or config.get('ac_parameters') or any(
+                key in config for key in ('ac_min_size', 'ac_min_flow', 'full_suite')):
+            raise ValueError('suite_defaults uses official AA/AC parameters; remove manifest overrides')
+        for key, default in (('cngain', 4.5), ('cnsize_min', 50000)):
+            if key in config.get('local_cnv', {}) and config['local_cnv'][key] != default:
+                raise ValueError(f'suite_defaults requires the official seed-filter default {key}={default}')
+        for runtime in config.get('runtimes', []):
+            if 'PYTHONHASHSEED' in runtime.get('env', {}):
+                raise ValueError('suite_defaults inherits the Python hash environment; remove runtime PYTHONHASHSEED')
+            if config['mode'] == 'with_bam' and 'solver' in runtime:
+                raise ValueError('suite_defaults selects the official AA solver; remove runtime solver overrides')
     if config.get('aa_parameters', {}).get('runmode', 'CYCLES') not in ('CYCLES', 'FULL'):
         raise ValueError('aa_parameters.runmode must be CYCLES or FULL')
     if 'reuse_aa_from' in config:
@@ -424,7 +439,8 @@ def _run_locked(config, lock, entries, out, check_only):
         raise ValueError('Manifest changed; choose a new output directory')
     atomic_json(provenance, dict(program='AmpliconSuite Cross-Version Concordance', program_version=PROGRAM_VERSION,
         created_utc=now(), manifest_hash=run_identity, reference_version=FIXED_REFERENCE,
-        mode=config['mode'], whole_genome_bam_operations='prohibited', synthetic=bool(config.get('synthetic', config.get('_synthetic', False)))))
+        mode=config['mode'], parameter_policy=config.get('parameter_policy', 'custom'),
+        whole_genome_bam_operations='prohibited', synthetic=bool(config.get('synthetic', config.get('_synthetic', False)))))
     atomic_json(out / 'versions.lock.json', lock)
     runtimes = {r['id']: r for r in config.get('runtimes', [])}
     checks, upstream, downstream, source_files = [], [], [], []
@@ -631,8 +647,18 @@ def _run_locked(config, lock, entries, out, check_only):
                     if vid not in verified:
                         env = dict(os.environ, AA_DATA_REPO=config['reference']['aa_data_repo'], PYTHONDONTWRITEBYTECODE='1')
                         try:
+                            if config.get('parameter_policy') == 'suite_defaults':
+                                from .concordance_official_solver import official_solver
+                                solver, reason = official_solver(runtime, entry, env)
+                                official_solver_evidence = dict(requested=solver, reason=reason)
+                                runtime = dict(runtime, solver=solver)
+                                if entry['aa']['version'].startswith('1.6.'):
+                                    runtime['_allow_native_mosek_fallback'] = True
+                                runtimes[vid] = runtime
                             verified[vid] = timed_call('runtime_check', verify_runtime, runtime, entry, env,
                                 timing=dict(sample_id=sid, version=vid))
+                            if config.get('parameter_policy') == 'suite_defaults':
+                                verified[vid]['official_solver'] = official_solver_evidence
                         except Exception as exc:
                             verified[vid] = dict(ready=False, diagnostics=[str(exc)], id=vid)
                         atomic_json(out / 'runtime_check.json', verified)
@@ -754,10 +780,10 @@ def main(argv=None):
             source = Path(args.from_run).resolve() if args.from_run else out
             original = json.loads((source / 'provenance.json').read_text())
             run_version = original.get('program_version')
-            if run_version not in {PROGRAM_VERSION, '0.4.2', '0.4.1', '0.4.0', '0.3.0', '0.3.1', '0.3.2'}:
+            if run_version not in {PROGRAM_VERSION, '0.4.3', '0.4.2', '0.4.1', '0.4.0', '0.3.0', '0.3.1', '0.3.2'}:
                 raise ValueError('Use the original program version to redraw this report, or run the manifest into a new output directory')
             names = ('downstream_records.json', 'upstream_records.json', 'config.resolved.json')
-            if run_version in {PROGRAM_VERSION, '0.4.2'}:
+            if run_version in {PROGRAM_VERSION, '0.4.3', '0.4.2'}:
                 names += ('local_cnv_comparator_records.json',)
             expected = json.loads((source / 'report_inputs.sha256.json').read_text())
             if set(expected) != set(names):

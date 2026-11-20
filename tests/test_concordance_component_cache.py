@@ -4,9 +4,11 @@ These callers are deliberately small test programs. Native official AA/AC A/B
 checks are a separate recorded experiment, not a claim made by this fixture.
 """
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import test_concordance_bounded_workflow as bounded_fixture
 from ascompare.common import atomic_json, digest
@@ -63,6 +65,57 @@ class ComponentCacheIntegrationTests(unittest.TestCase):
             self.assertEqual(stages['aa']['status'], 'complete')
             self.assertEqual(stages['ac']['status'], 'complete')
             self.assertTrue((Path(record['run_dir']) / 'ac.input').is_file())
+
+    def test_suite_defaults_leave_native_hash_and_classification_unchanged(self):
+        self.config['parameter_policy'] = 'suite_defaults'
+        self.config.pop('aa_parameters')
+        self.config.pop('ac_parameters')
+        self.fixture.aa.write_text(self.fixture.aa.read_text() +
+            "\nassert 'PYTHONHASHSEED' not in os.environ\n")
+        with patch.dict(os.environ):
+            os.environ.pop('PYTHONHASHSEED', None)
+            first = self.run_job()
+            second = self.run_job('suite-1.3.4')
+            resumed = self.run_job()
+        for record in (first, second):
+            self.assert_ok(record)
+            attempt = Path(record['run_dir'])
+            stages = json.loads((attempt / 'stages.json').read_text())
+            aa = stages['aa']['argv']
+            self.assertEqual(aa[aa.index('--runmode') + 1], 'FULL')
+            self.assertEqual(aa[aa.index('--downsample') + 1], '10')
+            self.assertNotIn('--no_cstats', aa)
+            self.assertNotIn('--min_size', stages['ac']['argv'])
+            self.assertNotIn('--min_flow', stages['ac']['argv'])
+            self.assertIsNone(json.loads((attempt / 'aa_background.json').read_text())['python_hash_seed'])
+        self.assertEqual(self.fixture.trace(), ['AA', 'AC', 'AA', 'AC'])
+        self.assertNotEqual(first['component_cache']['aa']['key'], second['component_cache']['aa']['key'])
+        self.assertEqual(first['run_dir'], resumed['run_dir'])
+
+    def test_suite_defaults_accept_native_background_recomputation(self):
+        self.config['parameter_policy'] = 'suite_defaults'
+        bam = self.fixture.bam
+        stats = self.root / 'seed-stage.stats'
+        # The 11 in the native field is computed coverage support, not a
+        # requested minimum to substitute in the AA command.
+        fields = ['20','20','3','20','20','5','150','330','25','255','405','11','0.95','3',str(bam.stat().st_size)]
+        stats.write_text('\t'.join([str(bam), *fields])+'\n')
+        self.fixture.aa.write_text(self.fixture.aa.read_text() + """
+stats=pathlib.Path(os.environ['AA_DATA_REPO'])/'coverage.stats'
+with stats.open('a') as handle:
+    handle.write(stats.read_text())
+print('cstats not found, generating coverage statistics')
+""")
+        runtime = self.fixture.make_runtime('suite-1.3.7')
+        entry = self.fixture.entries['suite-1.3.7']
+        verified = self.fixture.make_verified(runtime, entry)
+        measurement = dict(mode='same_version_seed_stage', path=str(stats), fields=fields, sha256=digest(stats))
+        result = run_bounded_downstream(self.fixture.sample, self.fixture.seeds, runtime, entry,
+                                        verified, self.config, self.root/'native', measurement)
+        self.assert_ok(result)
+        record = json.loads((Path(result['run_dir'])/'aa_background.json').read_text())
+        self.assertFalse(record['reuse_confirmed'])
+        self.assertEqual(self.fixture.trace(), ['AA', 'AC'])
 
     def test_ac_parameter_change_reuses_aa_and_reexecutes_ac(self):
         first = self.run_job()
@@ -417,6 +470,22 @@ class ComponentModeManifestTests(unittest.TestCase):
         atomic_json(self.manifest, data)
         with self.assertRaisesRegex(ValueError, 'reuse_aa_from'):
             load_manifest(self.manifest)
+
+    def test_suite_defaults_require_removing_algorithm_overrides(self):
+        data = json.loads(self.manifest.read_text())
+        data['parameter_policy'] = 'suite_defaults'
+        overrides = (
+            ('aa_parameters', {'runmode': 'CYCLES'}),
+            ('ac_parameters', {'min_size': 50000}),
+            ('local_cnv', {'cngain': 6}),
+        )
+        for key, value in overrides:
+            with self.subTest(key=key):
+                atomic_json(self.manifest, {**data, key: value})
+                with self.assertRaisesRegex(ValueError, 'suite_defaults'):
+                    load_manifest(self.manifest)
+        atomic_json(self.manifest, data)
+        self.assertEqual(load_manifest(self.manifest)[0]['parameter_policy'], 'suite_defaults')
 
 
 if __name__ == '__main__':

@@ -65,10 +65,11 @@ def seed_stage_measurement(attempt, rows, sample, runtime, verified, config):
             raise ValueError('upstream records reference a different producer')
         recorded = json.loads(provenance.read_text())
         args = recorded['amplified_intervals']['args']
+        expected_no_cstats = config.get('parameter_policy') != 'suite_defaults'
         if (recorded['version'] != runtime['id'] or recorded['io_policy'] != config['_io_policy_path']
                 or recorded['amplified_intervals']['sha256'] != digest(helper)
                 or Path(recorded['amplified_intervals']['path']).resolve() != helper
-                or '--no_cstats' not in args or args[args.index('--ref') + 1] != build
+                or ('--no_cstats' in args) != expected_no_cstats or args[args.index('--ref') + 1] != build
                 or Path(args[args.index('--bam') + 1]).resolve() != bam
                 or (private_ref/build).resolve(strict=True) != (Path(config['reference']['aa_data_repo'])/build).resolve(strict=True)):
             raise ValueError('upstream native measurement identity mismatch')
@@ -87,7 +88,7 @@ def seed_stage_measurement(attempt, rows, sample, runtime, verified, config):
         return dict(mode='native_measurement', reason=str(exc))
 
 
-def stage_measurement(measurement, attempt, bam):
+def stage_measurement(measurement, attempt, bam, *, allow_alias=True):
     """Stage AA's own file format, preserving all numeric tokens verbatim."""
     original = Path(bam).resolve()
     fields = validated_values(Path(measurement['path']), original)
@@ -96,7 +97,7 @@ def stage_measurement(measurement, attempt, bam):
     # Historical AA splits its native cache on whitespace and calls getsize
     # on the BAM filename. This transient path points to the original BAM.
     native_name = original
-    if any(c.isspace() for c in str(original)):
+    if allow_alias and any(c.isspace() for c in str(original)):
         native_name = attempt / 'coverage_input.bam'
         if any(c.isspace() for c in str(native_name)):
             raise ValueError('Historical AA needs a whitespace-free working directory')

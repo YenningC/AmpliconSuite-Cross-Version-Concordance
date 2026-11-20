@@ -331,6 +331,14 @@ def _ac_parameters(config):
     return parameters
 
 
+def ac_cli_flags(config, suite, *, ac_only=False):
+    if config.get('parameter_policy') == 'suite_defaults':
+        return ['--report_complexity'] if suite == 'suite-1.2.2' else []
+    params = _ac_parameters(config) if ac_only else config.get('ac_parameters', {})
+    return ['--min_size', str(params.get('min_size', 50000)),
+            '--min_flow', str(params.get('min_flow', 1.0))]
+
+
 def _probe_json(stdout):
     """Solver imports may print license/status lines around the JSON payload."""
     for line in reversed(stdout.splitlines()):
@@ -422,12 +430,14 @@ def reclassify_result(source_record, runtime, entry, config, destination):
         common['ac_runtime_verified']=True
         common['provenance_kind']='verified_ac_on_inherited_aa'
         atomic_json(out/'runtime_check.json',verified)
-        parameters=_ac_parameters(config)
-        if any('--'+k not in verified['ac']['help'] for k in parameters):raise ValueError('Locked AC does not support requested classification parameters')
+        flags=ac_cli_flags(config,version,ac_only=True)
+        if any(flag not in verified['ac']['help'] for flag in flags if flag.startswith('--')):
+            raise ValueError('Locked AC does not support requested classification parameters')
         command=[str(Path(runtime['ac_python']).absolute()),str(Path(runtime['ac_script']).resolve()),'-i',str(inputfile),
-            '--ref',reference['build'],'-o',str(out/'ac/classification')]
-        for key,value in parameters.items():command+=['--'+key,str(value)]
+            '--ref',reference['build'],'-o',str(out/'ac/classification'),*flags]
+        parameters={} if config.get('parameter_policy') == 'suite_defaults' else _ac_parameters(config)
         atomic_json(out/'execution.json',{'created_utc':now(),'argv':command,'analysis_kind':'ac_only','parameters':parameters,
+            'parameter_policy':config.get('parameter_policy','custom'),
             'source_aa_version':source_aa,'source_graph_identity':_aa_identity(out)[1],'AA_was_not_rerun':True})
         common['ac_executed']=True
         with measure('ac',measurement_kind='subprocess',sample_id=sample,version=version,log_path=out/'ac.log') as clock:
@@ -582,7 +592,8 @@ def reclassify_cached(source_record,runtime,entry,config,job_dir):
         identity={'source_aa_files':hashes,'source_metadata':source_metadata,'target_id':runtime['id'],
             'ac_lock':entry['ac'],'bfb_lock':entry.get('bfb'),'supported_labels':verified['supported_labels'],
             'ac_input_writer_sha256':digest(Path(__file__).with_name('runner.py')),
-            **_runtime_cache_identity(verified),'binaries':binaries,'parameters':_ac_parameters(config),
+            **_runtime_cache_identity(verified),'binaries':binaries,
+            'classification_flags':ac_cli_flags(config,runtime['id'],ac_only=True),
             'reference_build':reference['build'],'reference_resources':resources,'environment_sha256':_stable_hash(effective_env)}
         signature=_stable_hash(identity)
         atomic_json(job/'preflight_latest.json',{'created_utc':now(),'signature':signature,'identity':identity,'verified':verified})

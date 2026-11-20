@@ -86,6 +86,22 @@ class BoundedLocalCnvTests(unittest.TestCase):
         self.assertEqual(result['source_version'], 'suite-1.3.4')
         self.assertEqual(result['version'], 'suite-1.6.2')
 
+    def test_suite_defaults_use_native_seed_parameters_and_reject_custom_thresholds(self):
+        self.config['parameter_policy'] = 'suite_defaults'
+        self.config['local_cnv'].update(cngain=4.5, cnsize_min=50000)
+        result = self.run_mock()[0]
+        self.assertEqual(result['status'], 'retained')
+        args = self.commands[-1][1]
+        self.assertEqual(args[args.index('--gain') + 1], '4.5')
+        self.assertEqual(args[args.index('--cnsize_min') + 1], '50000')
+        self.assertNotIn('--no_cstats', args)
+
+        self.commands.clear()
+        self.config['local_cnv']['cnsize_min'] = 50000.5
+        result = self.run_mock('rejected')[0]
+        self.assertEqual((result['status'], result['stage']), ('failed', 'input_check'))
+        self.assertEqual(self.commands, [])
+
     def test_missing_normal_or_background_is_unsupported_before_tools(self):
         self.sample.pop('normal_alignment')
         with patch.object(cnv, '_probe_cnvkit') as probe:

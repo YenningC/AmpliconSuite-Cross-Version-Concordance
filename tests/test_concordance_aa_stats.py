@@ -68,6 +68,24 @@ class NativeHandoffTests(unittest.TestCase):
         self.verified['aa']['commit'] = 'different'
         self.assertIsNone(self.measurement())
 
+    def test_suite_defaults_accept_verified_native_stats_without_no_cstats(self):
+        self.config['parameter_policy'] = 'suite_defaults'
+        self.assertEqual(self.measurement()['mode'], 'native_measurement')
+        upstream = json.loads(self.prov.read_text())
+        upstream['amplified_intervals']['args'].remove('--no_cstats')
+        self.prov.write_text(json.dumps(upstream))
+        command = json.loads(self.log.read_text())
+        command['argv'].remove('--no_cstats')
+        self.log.write_text(json.dumps(command) + '\n')
+        evidence = self.measurement()
+        self.assertEqual(evidence['mode'], 'same_version_seed_stage')
+        self.assertEqual(evidence['fields'], self.fields)
+        job = self.root/'downstream'
+        (job/'reference').mkdir(parents=True)
+        self.assertEqual(Path(stage_measurement(evidence, job, self.bam, allow_alias=False)), self.bam)
+        self.assertEqual((job/'reference'/'coverage.stats').read_bytes(), self.stats.read_bytes())
+        self.assertFalse((job/'coverage_input.bam').exists())
+
     def test_command_and_measurement_integrity(self):
         self.log.write_text(self.log.read_text().replace('policy.json','other.json'))
         self.assertEqual(self.measurement()['mode'], 'native_measurement')
