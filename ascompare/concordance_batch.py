@@ -69,7 +69,7 @@ def import_samples(samples_path, config_path, output_path):
     result. Sample order follows first appearance in the TSV.
     """
     # Imported lazily to keep the command-line entry point free of import cycles.
-    from .concordance import _resolve, load_manifest
+    from .concordance import _resolve, cnv_scope, load_manifest
 
     samples_path = Path(samples_path).expanduser().resolve(strict=True)
     config_path = Path(config_path).expanduser().resolve(strict=True)
@@ -124,7 +124,10 @@ def import_samples(samples_path, config_path, output_path):
         if sample['source_result'].get('seeds_bed'):
             sample['seeds_bed'] = sample['source_result']['seeds_bed']
         if config['mode'] == 'with_bam':
-            missing = {'alignment', 'index', 'seeds_bed'} - set(sample)
+            required = {'alignment', 'index'}
+            if cnv_scope(config) == 'local':
+                required.add('seeds_bed')
+            missing = required - set(sample)
             if missing:
                 raise ValueError(f'Sample {sid}: with_bam needs ' + ', '.join(sorted(missing)))
             if bool(sample.get('normal_alignment')) != bool(sample.get('normal_index')):

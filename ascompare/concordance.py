@@ -1,4 +1,4 @@
-"""AmpliconSuite Cross-Version Concordance: result-first, bounded, local version comparison."""
+"""AmpliconSuite Cross-Version Concordance: local, paired version comparison."""
 import argparse
 import copy
 import hashlib
@@ -24,7 +24,7 @@ FIXED_REFERENCE = 'suite-1.6.2'
 PATH_KEYS = {'alignment', 'index', 'normal_alignment', 'normal_index', 'seeds_bed',
              'source_seed_bed', 'baseline_cns', 'aa_dir', 'ac_dir', 'run_dir',
              'result_dir', 'stages_json', 'baseline_provenance', 'fasta', 'aa_data_repo', 'background_bed',
-             'aa_script', 'ac_script', 'suite_script', 'cnvkit_script', 'version_lock', 'reuse_aa_from'}
+             'aa_script', 'ac_script', 'suite_script', 'cnvkit_script', 'version_lock', 'reuse_aa_from', 'reuse_global_cnv_from'}
 
 
 def fast_fingerprint(path):
@@ -125,6 +125,12 @@ def _reference_lengths(config):
     return {f[0]: int(f[1]) for line in fai.read_text().splitlines() if (f := line.split())}
 
 
+def cnv_scope(config):
+    # An old manifest which explicitly configured bounded windows keeps its
+    # scope. This prevents an upgrade from silently scanning those BAMs.
+    return config.get('cnv_scope', 'local' if 'local_cnv' in config else 'global')
+
+
 def load_manifest(path):
     path = Path(path).resolve(strict=True)
     config = _resolve(json.loads(path.read_text()), path.parent)
@@ -135,6 +141,26 @@ def load_manifest(path):
     config['reference_version'] = FIXED_REFERENCE
     if config.get('analysis_scope') == 'full_suite' or config.get('alignment_fingerprint') == 'full':
         raise ValueError('Whole-genome operations and full BAM hashing are prohibited')
+    global_run = config['mode'] == 'with_bam' and cnv_scope(config) == 'global'
+    if config['mode'] == 'with_bam':
+        config['cnv_scope'] = cnv_scope(config)
+        if config['cnv_scope'] not in ('local', 'global'):
+            raise ValueError('cnv_scope must be local or global')
+        if global_run:
+            if 'local_cnv' in config:
+                raise ValueError('Remove local_cnv window settings when choosing global discovery')
+            config.setdefault('parameter_policy', 'suite_defaults')
+            gsettings = config.get('global_cnv', {})
+            if not isinstance(gsettings, dict) or set(gsettings) - {'processes', 'timeout_seconds'}:
+                raise ValueError('global_cnv accepts processes and timeout_seconds')
+            if any(type(v) is not int or v < 1 for v in gsettings.values()):
+                raise ValueError('global_cnv processes and timeout_seconds must be positive integers')
+            fraction = config.get('seed_match_fraction', 1.0)
+            if type(fraction) not in (int, float) or not 0 < fraction <= 1:
+                raise ValueError('seed_match_fraction must be in (0, 1]')
+            cap = config.get('sampling', {}).get('max_seeds', 10)
+            if cap != 'all' and (type(cap) is not int or cap < 1):
+                raise ValueError('sampling.max_seeds must be a positive integer or "all"')
     lock = load_lock(config.get('version_lock'))
     if lock['reference_version'] != FIXED_REFERENCE:
         raise ValueError('Version lock reference differs from this program release')
@@ -160,6 +186,12 @@ def load_manifest(path):
                 raise ValueError('When patient_id is used, every sample must have a nonempty patient_id')
             safe_id(patient)
     for s in samples:
+        if global_run:
+            archives = s.get('global_cnv_results', [])
+            if not isinstance(archives, list) or not all(
+                    isinstance(a, dict) and set(a) <= {'result_dir','version','cns_sha256'} and a.get('result_dir')
+                    for a in archives):
+                raise ValueError('global_cnv_results must list historical Suite result_dir entries')
         if not s.get('source_version'):
             raise ValueError('source_version is required in both input modes')
         safe_id(s['source_version'])
@@ -170,7 +202,8 @@ def load_manifest(path):
         s['source_result'] = discover_result(s.get('source_result', {}))
         if s['source_result'].get('version', s['source_version']) != s['source_version']:
             raise ValueError('source_result.version contradicts source_version')
-        if not (s['source_result'].get('aa_dir') and s['source_result'].get('ac_dir')):
+        if not (s['source_result'].get('aa_dir') and s['source_result'].get('ac_dir')
+                or global_run and s['source_result'].get('result_dir')):
             raise ValueError('source_result must identify AA and AC directories')
         s['comparison_results'] = [discover_result(r) for r in s.get('comparison_results', [])]
         versions = [s['source_version']] + [r['version'] for r in s['comparison_results']]
@@ -184,9 +217,12 @@ def load_manifest(path):
             if not s['alignment'].lower().endswith('.bam'):
                 raise ValueError('This bounded release accepts indexed BAM only; CRAM conversion is prohibited')
             seed = s.get('seeds_bed') or s['source_result'].get('seeds_bed')
-            if not seed:
+            if not seed and not global_run:
                 raise ValueError('Existing final Suite seed BED required; no automatic genome-wide discovery')
-            s['seeds_bed'] = seed
+            if seed:
+                s['seeds_bed'] = seed
+            if bool(s.get('normal_alignment')) != bool(s.get('normal_index')):
+                raise ValueError('normal_alignment and normal_index must be supplied together')
     if config['mode'] == 'with_bam' and not all(config.get('reference', {}).get(k) for k in ('build', 'fasta', 'aa_data_repo')):
         raise ValueError('with_bam requires a fixed reference build, FASTA and AA resource directory')
     for runtime in config.get('runtimes', []):
@@ -228,6 +264,10 @@ def load_manifest(path):
         if (config['mode'] != 'with_bam' or not isinstance(previous, str) or not previous
                 or not (Path(previous) / '.component_cache' / 'aa').is_dir()):
             raise ValueError('reuse_aa_from requires an existing with_bam output with a completed AA cache')
+    if 'reuse_global_cnv_from' in config:
+        origin = config['reuse_global_cnv_from']
+        if not global_run or not isinstance(origin, str) or not (Path(origin) / 'global_cnv_cache').is_dir():
+            raise ValueError('reuse_global_cnv_from needs a prior global with_bam output')
     import math
     for key, default in (('min_size', 50000), ('min_flow', 1.0)):
         value = float(config.get('ac_parameters', {}).get(key, default))
@@ -244,6 +284,23 @@ def load_manifest(path):
 def _validate_bam(sample, config, lengths):
     import pysam
     identities = []
+    discovery_lengths = {}
+    if config.get('cnv_scope') == 'global':
+        ref = config['reference']
+        build = ref['build']
+        genome = Path(ref['aa_data_repo']) / build
+        sizes = genome / (build + '_noAlt.fa.fai')
+        for line in sizes.read_text().splitlines():
+            if line.strip():
+                chrom, size, *_ = line.split()
+                if chrom in discovery_lengths or lengths.get(chrom) != int(size):
+                    raise ValueError(f'Global discovery reference contig differs from FASTA: {chrom}')
+                discovery_lengths[chrom] = int(size)
+        if not discovery_lengths:
+            raise ValueError('Global discovery contig list is empty')
+        if not sample.get('normal_alignment') or build == 'GRCh38_viral':
+            if not (genome / (build + '_cnvkit_filtered_ref.cnn')).is_file():
+                raise ValueError('Missing Suite tumor-only CNVkit reference for ' + build)
     for key, index_key in (('alignment', 'index'), ('normal_alignment', 'normal_index')):
         if not sample.get(key):
             continue
@@ -257,6 +314,9 @@ def _validate_bam(sample, config, lengths):
             if bam.header.to_dict().get('HD', {}).get('SO') != 'coordinate':
                 raise ValueError('BAM header does not declare coordinate sorting')
             found = dict(zip(bam.references, bam.lengths))
+            for chrom, size in discovery_lengths.items():
+                if found.get(chrom) != size:
+                    raise ValueError(f'{key} lacks the expected global discovery contig: {chrom}')
             for chrom, size in lengths.items():
                 if chrom in found and found[chrom] != size:
                     raise ValueError('BAM/reference contig length mismatch')
@@ -425,6 +485,8 @@ def _run_locked(config, lock, entries, out, check_only):
     from .concordance_cnv import run_local_upstream
     from .concordance_report import write_concordance_reports
     config = copy.deepcopy(config)
+    global_run = config['mode'] == 'with_bam' and config.get('cnv_scope') == 'global'
+    bam_scope = 'global_CNVkit_only; bounded_seed_filter_and_AA' if global_run else 'prohibited'
     if config['mode'] == 'with_bam':
         from .concordance_cnv_source import identify_source_cnvkit
         for sample in config['samples']:
@@ -440,7 +502,7 @@ def _run_locked(config, lock, entries, out, check_only):
     atomic_json(provenance, dict(program='AmpliconSuite Cross-Version Concordance', program_version=PROGRAM_VERSION,
         created_utc=now(), manifest_hash=run_identity, reference_version=FIXED_REFERENCE,
         mode=config['mode'], parameter_policy=config.get('parameter_policy', 'custom'),
-        whole_genome_bam_operations='prohibited', synthetic=bool(config.get('synthetic', config.get('_synthetic', False)))))
+        whole_genome_bam_operations=bam_scope, synthetic=bool(config.get('synthetic', config.get('_synthetic', False)))))
     atomic_json(out / 'versions.lock.json', lock)
     runtimes = {r['id']: r for r in config.get('runtimes', [])}
     checks, upstream, downstream, source_files = [], [], [], []
@@ -492,6 +554,12 @@ def _run_locked(config, lock, entries, out, check_only):
                     source_files.append(dict(path=seeds_path, sha256=digest(seeds_path)))
                 specs = [(source, sample['source_result'])] + [(r['version'], r) for r in sample['comparison_results']]
                 for vid, spec in specs:
+                    if global_run and spec is sample['source_result'] and spec.get('result_dir'):
+                        if not Path(spec['result_dir']).is_dir():
+                            raise ValueError('Source Suite result directory is missing')
+                        if not (spec.get('aa_dir') and spec.get('ac_dir')):
+                            spec['_input_error'] = 'Source AA/AC files unavailable for historical replay comparison'
+                            continue
                     if check_only:
                         from .concordance_import import inspect_import_format
                         entry = entries[vid]
@@ -517,7 +585,7 @@ def _run_locked(config, lock, entries, out, check_only):
                             if spec.get(key) and Path(spec[key]).is_file():
                                 source_files.append(dict(path=spec[key], sha256=digest(spec[key])))
                     except (OSError, ValueError, KeyError) as exc:
-                        if spec is sample['source_result']:
+                        if spec is sample['source_result'] and not global_run:
                             raise
                         spec['_input_error'] = str(exc)
                 if config['mode'] == 'with_bam':
@@ -536,6 +604,9 @@ def _run_locked(config, lock, entries, out, check_only):
                     reference_build=build, reference_identity='declared_build_and_contig_lengths_only',
                     reason='No whole-genome BAM validation performed'))
                 if config['mode'] == 'with_bam':
+                    if global_run:
+                        checks[-1].update(cnv_scope='global', historical_seed_bed_supplied=bool(seeds_path),
+                                          historical_result_issue=sample['source_result'].get('_input_error'))
                     checks[-1].update(source_cnvkit_version=sample.get('source_cnvkit_version'),
                                       source_cnvkit_origin=sample['source_cnvkit_evidence']['origin'],
                                       source_cnvkit_issue=sample.get('_source_cnvkit_issue'))
@@ -558,15 +629,45 @@ def _run_locked(config, lock, entries, out, check_only):
         atomic_json(out / 'config.resolved.json', config)
         return dict(check_only=True, input_check=checks, import_format_check=import_checks)
     verified = {}
+    def verified_runtime(vid, sid):
+        runtime, entry = runtimes[vid], entries[vid]
+        if vid not in verified:
+            env = dict(os.environ, AA_DATA_REPO=config['reference']['aa_data_repo'], PYTHONDONTWRITEBYTECODE='1')
+            try:
+                if config.get('parameter_policy') == 'suite_defaults':
+                    from .concordance_official_solver import official_solver
+                    solver, reason = official_solver(runtime, entry, env)
+                    official_solver_evidence = dict(requested=solver, reason=reason)
+                    runtime = dict(runtime, solver=solver)
+                    if entry['aa']['version'].startswith('1.6.'):
+                        runtime['_allow_native_mosek_fallback'] = True
+                    runtimes[vid] = runtime
+                verified[vid] = timed_call('runtime_check', verify_runtime, runtime, entry, env,
+                    timing=dict(sample_id=sid, version=vid))
+                if config.get('parameter_policy') == 'suite_defaults':
+                    verified[vid]['official_solver'] = official_solver_evidence
+            except Exception as exc:
+                verified[vid] = dict(ready=False, diagnostics=[str(exc)], id=vid)
+            atomic_json(out / 'runtime_check.json', verified)
+        return runtimes[vid]
+
     for sample_index, sample in enumerate(config['samples'], 1):
         sid, source = sample['sample_id'], sample['source_version']
         versions = list(dict.fromkeys([source, *config['target_versions']]))
         if sample.get('_input_failed'):
-            for vid in versions:
+            if global_run:
+                sample.update(upstream_seed_ids=[], selected_seed_ids=[], global_source_seed_calibration='unverified',
+                              global_seed_sets={v:dict(status='failed', stage='input_check',
+                              reason=sample['_input_failed'], seeds=[]) for v in versions})
+                from .concordance_global_report import global_report_units
+                up, down = global_report_units(sample, {}, versions)
+                upstream.extend(up)
+                downstream.extend(down)
+            for vid in ([] if global_run else versions):
                 r = empty_record(sid, '__input_check__', vid, 'failed', 'input_check', sample['_input_failed'])
                 r.update(analysis_kind='aa_ac', source_version=source, comparison_eligible=False)
                 downstream.append(r)
-            if config['mode'] == 'with_bam':
+            if config['mode'] == 'with_bam' and not global_run:
                 local_cnv_records.extend(timed_call('local_cnv_comparators', run_local_cnv_comparators,
                     sample, config, entries, runtimes, verified, [], out, timing=dict(sample_id=sid)))
             record_progress(sample, 'input_failed')
@@ -577,14 +678,15 @@ def _run_locked(config, lock, entries, out, check_only):
         print(f'[{sample_index}/{len(config["samples"])}] Analyzing {sid}; source={source}; {len(versions)} versions', flush=True)
         seeds = sample['seeds']
         sampling = config.get('sampling', {})
-        max_seeds = int(sampling.get('max_seeds', 10))
-        if max_seeds < 1:
-            raise ValueError('sampling.max_seeds must be positive')
-        rng = random.Random(str(sampling.get('random_seed', 20261117)) + ':' + sid)
-        chosen = sorted(rng.sample(seeds, min(max_seeds, len(seeds))), key=lambda x: x['seed_id'])
-        sample['selected_seed_ids'] = [s['seed_id'] for s in chosen]
-        atomic_json(out / 'sampling' / (sid + '.json'), dict(all_seeds=seeds, selected=chosen,
-                    rule='uniform_without_replacement_before_results', parameters=sampling))
+        if not global_run:
+            max_seeds = int(sampling.get('max_seeds', 10))
+            if max_seeds < 1:
+                raise ValueError('sampling.max_seeds must be positive')
+            rng = random.Random(str(sampling.get('random_seed', 20261117)) + ':' + sid)
+            chosen = sorted(rng.sample(seeds, min(max_seeds, len(seeds))), key=lambda x: x['seed_id'])
+            sample['selected_seed_ids'] = [s['seed_id'] for s in chosen]
+            atomic_json(out / 'sampling' / (sid + '.json'), dict(all_seeds=seeds, selected=chosen,
+                        rule='uniform_without_replacement_before_results', parameters=sampling))
         imported = {}
         specs = [(source, sample['source_result'])] + [(r['version'], r) for r in sample['comparison_results']]
         for vid, spec in specs:
@@ -632,6 +734,12 @@ def _run_locked(config, lock, entries, out, check_only):
                 r.update(source_version=source, seed_id='__whole_result__', source_aa_version=baseline.get('source_aa_version'))
                 r['reference_scope'] = baseline.get('reference_scope', 'declared_reference_' + sample['reference_build'])
                 downstream.append(r)
+        elif global_run:
+            from .concordance_global_workflow import run_global_sample
+            observed_up, observed_down = run_global_sample(
+                sample, baseline, versions, entries, config, out, runtimes, verified, verified_runtime)
+            upstream.extend(observed_up)
+            downstream.extend(observed_down)
         elif not chosen:
             reason = 'No supplied candidate regions; selected-region analysis is unevaluable'
             sample['source_bridge_status'] = 'unverified'
@@ -654,24 +762,7 @@ def _run_locked(config, lock, entries, out, check_only):
                 print(f'  {sid} / {vid}: local upstream and selected-seed downstream', flush=True)
                 runtime, entry = runtimes.get(vid), entries[vid]
                 if runtime:
-                    if vid not in verified:
-                        env = dict(os.environ, AA_DATA_REPO=config['reference']['aa_data_repo'], PYTHONDONTWRITEBYTECODE='1')
-                        try:
-                            if config.get('parameter_policy') == 'suite_defaults':
-                                from .concordance_official_solver import official_solver
-                                solver, reason = official_solver(runtime, entry, env)
-                                official_solver_evidence = dict(requested=solver, reason=reason)
-                                runtime = dict(runtime, solver=solver)
-                                if entry['aa']['version'].startswith('1.6.'):
-                                    runtime['_allow_native_mosek_fallback'] = True
-                                runtimes[vid] = runtime
-                            verified[vid] = timed_call('runtime_check', verify_runtime, runtime, entry, env,
-                                timing=dict(sample_id=sid, version=vid))
-                            if config.get('parameter_policy') == 'suite_defaults':
-                                verified[vid]['official_solver'] = official_solver_evidence
-                        except Exception as exc:
-                            verified[vid] = dict(ready=False, diagnostics=[str(exc)], id=vid)
-                        atomic_json(out / 'runtime_check.json', verified)
+                    runtime = verified_runtime(vid, sid)
                     aa_verified = verified[vid].get('aa', {})
                     measurement = None
                     if aa_verified.get('version') == entry['aa']['version'] and aa_verified.get('sha256'):
@@ -713,20 +804,29 @@ def _run_locked(config, lock, entries, out, check_only):
                         r = empty_record(sid, seed['seed_id'], vid, 'missing', 'aa', 'No configured AA+AC runtime')
                         r.update(analysis_kind='aa_ac', source_version=source, comparison_eligible=False)
                         downstream.append(r)
-        if config['mode'] == 'with_bam':
+        if config['mode'] == 'with_bam' and not global_run:
             local_cnv_records.extend(timed_call('local_cnv_comparators', run_local_cnv_comparators,
                 sample, local_config, entries, runtimes, verified, native_source_rows, out,
                 timing=dict(sample_id=sid)))
         atomic_json(out / 'local_cnv_comparator_records.json', local_cnv_records)
         atomic_json(out / 'downstream_records.json', downstream)
         atomic_json(out / 'upstream_records.json', upstream)
-        record_progress(sample, 'finished')
+        if global_run:
+            states = sample['global_version_statuses']
+            failed = [v for v, r in states.items() if r['status'] not in ('ok', 'not_detected')]
+            progress[sample_index-1].update(completed_versions=len(states)-len(failed), total_versions=len(states),
+                                            incomplete_versions=failed)
+            state = 'failed' if len(failed) == len(states) else 'partial' if failed else 'finished'
+            print(f'  {sid}: {len(states)-len(failed)}/{len(states)} Suite paths completed', flush=True)
+            record_progress(sample, state)
+        else:
+            record_progress(sample, 'finished')
     atomic_json(out / 'config.resolved.json', config)
     atomic_json(out / 'downstream_records.json', downstream)
     atomic_json(out / 'upstream_records.json', upstream)
     table(out / 'run_metadata.tsv', [dict(program_version=PROGRAM_VERSION, created_utc=now(),
         reference_version=FIXED_REFERENCE, mode=config['mode'], manifest_hash=run_identity,
-        whole_genome_bam_operations='prohibited', **s) for s in source_files])
+        whole_genome_bam_operations=bam_scope, **s) for s in source_files])
     atomic_json(out / 'local_cnv_comparator_records.json', local_cnv_records)
     summary = timed_call('report_generation', write_concordance_reports, out, downstream, upstream,
         config, local_cnv_records=local_cnv_records)
@@ -736,7 +836,7 @@ def _run_locked(config, lock, entries, out, check_only):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description='AmpliconSuite Cross-Version Concordance: existing results, bounded local BAM operations')
+    parser = argparse.ArgumentParser(description='AmpliconSuite Cross-Version Concordance: global CNVkit discovery and version-specific seed reconstruction')
     parser.add_argument('--version', action='version', version=PROGRAM_VERSION)
     sub = parser.add_subparsers(dest='command', required=True)
     for name in ('check', 'run'):
@@ -786,11 +886,11 @@ def main(argv=None):
             source = Path(args.from_run).resolve() if args.from_run else out
             original = json.loads((source / 'provenance.json').read_text())
             run_version = original.get('program_version')
-            if run_version not in {PROGRAM_VERSION, '0.4.4.dev1', '0.4.4.dev0', '0.4.3', '0.4.2', '0.4.1', '0.4.0',
+            if run_version not in {PROGRAM_VERSION, '0.4.4.dev2', '0.4.4.dev1', '0.4.4.dev0', '0.4.3', '0.4.2', '0.4.1', '0.4.0',
                                    '0.3.0', '0.3.1', '0.3.2'}:
                 raise ValueError('Use the original program version to redraw this report, or run the manifest into a new output directory')
             names = ('downstream_records.json', 'upstream_records.json', 'config.resolved.json')
-            if run_version in {PROGRAM_VERSION, '0.4.4.dev1', '0.4.4.dev0', '0.4.3', '0.4.2'}:
+            if run_version in {PROGRAM_VERSION, '0.4.4.dev2', '0.4.4.dev1', '0.4.4.dev0', '0.4.3', '0.4.2'}:
                 names += ('local_cnv_comparator_records.json',)
             expected = json.loads((source / 'report_inputs.sha256.json').read_text())
             if set(expected) != set(names):

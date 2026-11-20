@@ -2,7 +2,11 @@
   "mode": "with_bam",
   "parameter_policy": "suite_defaults",
   "reference_version": "suite-1.6.2",
-  "target_versions": ["suite-1.6.0", "suite-1.6.1", "suite-1.6.2"],
+  "target_versions": [
+    "suite-1.6.0",
+    "suite-1.6.1",
+    "suite-1.6.2"
+  ],
   "reference": {
     "build": "hg19",
     "fasta": "/resources/AA_DATA_REPO/hg19/hg19full.fa",
@@ -10,20 +14,17 @@
   },
   "runtimes": [],
   "cnvkit_runtimes": [
-    {"version": "0.9.14", "python": "/env/cnvkit-0.9.14/bin/python", "script": "/env/cnvkit-0.9.14/bin/cnvkit.py"}
+    {
+      "version": "0.9.14",
+      "python": "/env/cnvkit-0.9.14/bin/python",
+      "script": "/env/cnvkit-0.9.14/bin/cnvkit.py"
+    }
   ],
   "threads": 1,
-  "local_cnv": {
-    "reference_mode": "matched_normal",
-    "background_bed": "/data/validated_background.bed",
-    "flank_bp": 100000,
-    "bin_size": 1000,
-    "max_window_bp": 25000000,
-    "min_seed_overlap": 1.0,
-    "cngain": 4.5,
-    "cnsize_min": 50000
+  "sampling": {
+    "max_seeds": 10,
+    "random_seed": 20261117
   },
-  "sampling": {"max_seeds": 10, "random_seed": 20261117},
   "io_policy": {
     "max_fetch_bp": 50000000,
     "max_total_fetch_bp": 500000000,
@@ -35,5 +36,9 @@
     "min_samples": 20,
     "margins": {},
     "upstream_loss_margin": null
+  },
+  "cnv_scope": "global",
+  "global_cnv": {
+    "processes": 1
   }
 }

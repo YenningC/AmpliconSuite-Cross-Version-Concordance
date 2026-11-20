@@ -9,7 +9,10 @@ from ascompare.concordance_cnv import load_builtin_map
 
 
 def build(manifest, prepared, templates, cnv_runtimes, lock):
+    from ascompare.concordance import cnv_scope
     result = copy.deepcopy(manifest)
+    if result['mode'] == 'with_bam' and cnv_scope(result) == 'global':
+        result.setdefault('parameter_policy', 'suite_defaults')
     entries = {e['id']: e for e in lock['versions'] if e.get('suite')}
     sources = {e['id']: e for e in prepared['sources']}
     template_map = {t['id']: t for t in templates}
@@ -48,17 +51,21 @@ def build(manifest, prepared, templates, cnv_runtimes, lock):
         runtime.update({k: source[k] for k in ('id', 'aa_script', 'ac_script')})
         if source.get('suite_script'):
             runtime['suite_script'] = source['suite_script']
-        if manifest.get('parameter_policy') != 'suite_defaults':
+        if result.get('parameter_policy') != 'suite_defaults':
             runtime['solver'] = 'clarabel' if entry['aa']['version'].startswith('1.6.') else 'mosek'
         if result['mode'] == 'with_bam':
             ck = recipes[vid]['cnvkit_version']
-            if ck not in registry:
+            runtime['cnvkit_version'] = ck
+            if ck in registry:
+                cnv_runtime = registry[ck]
+                runtime.update(cnvkit_python=cnv_runtime['python'], cnvkit_script=cnv_runtime['script'])
+                for key in ('env', 'extra_path'):
+                    if key in cnv_runtime:
+                        runtime['cnvkit_' + key] = copy.deepcopy(cnv_runtime[key])
+            elif cnv_scope(result) == 'local':
                 raise ValueError('Missing exact CNVkit runtime ' + ck + '; no latest-version fallback')
-            cnv_runtime = registry[ck]
-            runtime.update(cnvkit_python=cnv_runtime['python'], cnvkit_script=cnv_runtime['script'], cnvkit_version=ck)
-            for key in ('env', 'extra_path'):
-                if key in cnv_runtime:
-                    runtime['cnvkit_' + key] = copy.deepcopy(cnv_runtime[key])
+            # An authenticated same-version whole-genome CNS can be read
+            # without this executable. If none qualifies, the run reports missing.
         runtimes.append(runtime)
     result.update(reference_version=lock['reference_version'], target_versions=requested, runtimes=runtimes)
     return result

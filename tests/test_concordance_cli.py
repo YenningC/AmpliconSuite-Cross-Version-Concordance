@@ -21,7 +21,7 @@ class ConcordanceCliTests(unittest.TestCase):
                      for vid, py in [('suite-1.6.2','/current/python'),('suite-1.6.1','/bfb101/python')]]
         cnv = [dict(version=v, python='/cnv/'+v+'/python', script='/cnv/'+v+'/cnvkit.py')
                for v in ('0.9.10','0.9.13')]
-        manifest = dict(mode='with_bam', samples=[dict(source_version='suite-1.3.4',
+        manifest = dict(mode='with_bam', parameter_policy='custom', samples=[dict(source_version='suite-1.3.4',
                             source_result={'aa_dir':'relative/aa','ac_dir':'relative/ac'})])
         return manifest, prepared, templates, cnv, lock
 
@@ -41,6 +41,13 @@ class ConcordanceCliTests(unittest.TestCase):
             self.assertIn(runtime['id'], runtime['aa_script'])
         self.assertEqual(result['samples'][0]['source_result']['aa_dir'],'relative/aa')
 
+    def test_new_global_manifest_uses_native_solver_selection(self):
+        manifest, prepared, templates, cnv, lock = self.fixture()
+        manifest.pop('parameter_policy')
+        result = build(manifest, prepared, templates, cnv, lock)
+        self.assertEqual(result['parameter_policy'], 'suite_defaults')
+        self.assertFalse(any('solver' in r for r in result['runtimes']))
+
     def test_build_keeps_original_version_even_when_no_target_recipe_uses_it(self):
         manifest, prepared, templates, cnv, lock = self.fixture()
         original = {'version':'0.9.14', 'python':'/extra/bin/python', 'script':'/extra/bin/cnvkit.py'}
@@ -59,6 +66,10 @@ class ConcordanceCliTests(unittest.TestCase):
 
     def test_missing_historical_cnvkit_is_not_replaced_by_newest(self):
         manifest, prepared, templates, cnv, lock = self.fixture()
+        built = build(manifest, prepared, templates, cnv[1:], lock)
+        absent = [r for r in built['runtimes'] if r['cnvkit_version']=='0.9.10']
+        self.assertTrue(absent and all('cnvkit_script' not in r for r in absent))
+        manifest['cnv_scope']='local'
         with self.assertRaisesRegex(ValueError, '0.9.10'):
             build(manifest, prepared, templates, cnv[1:], lock)
         manifest['mode']='results_only'

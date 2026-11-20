@@ -13,6 +13,7 @@ import tempfile
 from collections import Counter, defaultdict
 from pathlib import Path
 
+from .concordance_global_report import GLOBAL_METRIC, GLOBAL_SCOPE, LOCUS_RULE
 from .reporting import write_tsv
 from .statistics import (AGREEMENT_METRICS, VALID, _independent_means,
                          _is_primary_pair, _pair, _primary_pair_keys, analyze)
@@ -207,7 +208,7 @@ def _detection_change_fields(stats, target, source):
                 class_change_n_regions=classes.get('n_regions', 0))
 
 
-def _downstream(out, groups, targets, ref, options, group_alpha, mode, synthetic):
+def _downstream(out, groups, targets, ref, options, group_alpha, mode, synthetic, global_mode=False):
     comparisons, sample_rows, links = [], [], []
     for (kind, source), records in groups.items():
         folder = out / "downstream" / kind / _slug(source)
@@ -223,6 +224,10 @@ def _downstream(out, groups, targets, ref, options, group_alpha, mode, synthetic
         scope = label + "; conditional on selected input units; no genome-wide seed-discovery validation"
         endpoint = "ac_only_fixed_source_aa" if kind == "ac_only" else "selected_seed_aa_ac" if mode == "with_bam" else "existing_aa_ac_output_metrics"
         unit = "sample_seed" if mode == "with_bam" and kind == "aa_ac" else "sample_input_result"
+        if global_mode:
+            label = "AA + AC on version-native seeds at sampled loci"
+            scope = "observed global-discovery pipeline outputs at sampled loci; native AA seed inputs vary by version"
+            endpoint, unit = "native_seed_aa_ac", "sample_locus"
         for table in (pairs, stats, compatibility):
             for row in table:
                 row.update(analysis_kind=kind, analysis_scope=endpoint, comparison_unit=unit,
@@ -236,7 +241,7 @@ def _downstream(out, groups, targets, ref, options, group_alpha, mode, synthetic
         _json(folder / "records.json", records)
         (folder / "report.md").write_text(f"# {label}\n\n固定参考：`{ref}`；输入来源：`{source}`。\n\n"
             + ("**SYNTHETIC TEST DATA / 人工合成测试数据：仅验证程序，不形成患者或生物学结论。**\n\n" if synthetic else "")
-            + ("仅重做 AC 分类，不能称为 AA 重建兼容。\n\n" if kind == "ac_only" else "相同输入种子的 AA＋AC 比较，未验证全基因组种子发现。\n\n" if mode == "with_bam" else "既有 AA＋AC 输出指标比较；未证明历史参数和资源相同，差异不能自动归因于算法版本。\n\n")
+            + ("仅重做 AC 分类，不能称为 AA 重建兼容。\n\n" if kind == "ac_only" else "各版本以本版原生种子重建，按抽中的共同位点比较完整结构。\n\n" if global_mode else "相同输入种子的 AA＋AC 比较，未验证全基因组种子发现。\n\n" if mode == "with_bam" else "既有 AA＋AC 输出指标比较；未证明历史参数和资源相同，差异不能自动归因于算法版本。\n\n")
             + "[统计表](statistics.tsv) · [差异明细](differences.tsv) · [兼容表](compatibility.tsv)。先对样本内的种子取平均。提供患者标识时，再对患者内样本取平均并按患者等权。单样本只描述观察相似度。\n", encoding="utf-8")
         links.append(dict(analysis_kind=kind, source_version=source, path=str((folder / "report.md").relative_to(out))))
         lookup = {(r["sample_id"], r["seed_id"], r["version"]): r for r in records}
@@ -281,7 +286,7 @@ def _downstream(out, groups, targets, ref, options, group_alpha, mode, synthetic
                 state = "evaluable" if valid and len(valid) == len(paired) else "partial" if valid else "not_evaluable"
                 item = dict(sample_id=sample, reference_version=ref, source_version=source, target_version=target,
                             analysis_kind=kind, comparison_scope=scope, identity_anchor=target == source,
-                            status=state, n_units=len(paired), n_evaluable_units=len(valid), n_signal_units=len(signal),
+                            status=state, n_units=sum(p["is_seed_region"] for p in paired), n_evaluable_units=len(valid), n_signal_units=len(signal),
                             target_statuses=sorted({p["status"] for p in paired}), source_statuses=sorted({p["comparator_status"] for p in paired}),
                             interpretation="observed_similarity_only; no_single_sample_equivalence")
                 item.update(_label_scope(valid))
@@ -309,6 +314,10 @@ def _upstream_context(row):
     chrom, start, end = (seed.get(k) for k in ('chrom', 'start', 'end'))
     threshold = row.get('min_seed_overlap')
     mode, rule = row.get('reference_mode'), row.get('matching_rule')
+    if row.get('global_scope') and rule == LOCUS_RULE:
+        if isinstance(chrom, str) and type(start) is int and type(end) is int and 0 <= start < end and mode:
+            return chrom, start, end, mode, rule
+        return None
     if (not isinstance(chrom, str) or not chrom or type(start) is not int or type(end) is not int
             or not 0 <= start < end or mode not in {'matched_normal', 'flat'}
             or not isinstance(rule, str) or not rule or type(threshold) not in (int, float)
@@ -323,13 +332,13 @@ def _control_status(row):
     if row.get('calibration_role') != 'source_control' or not _upstream_evaluable(row):
         return 'unverified'
     status = row.get('calibration_status', 'unverified')
-    if status == 'passed' and row['status'] != 'retained':
+    if not row.get('global_scope') and status == 'passed' and row['status'] != 'retained':
         return 'failed'
     return status
 
 
 def _upstream(records, samples, targets, ref, alpha, decision_alpha, minimum, margin,
-              patient_ids=None, primary_pairs=None):
+              patient_ids=None, primary_pairs=None, global_mode=False, seed_match_fraction=1.0):
     lookup, observed = {}, defaultdict(set)
     allowed = {"retained", "not_retained", "failed", "missing", "unsupported", "no_seeds", "invalid", "not_run"}
     for original in records:
@@ -351,7 +360,7 @@ def _upstream(records, samples, targets, ref, alpha, decision_alpha, minimum, ma
         if role is not None and role != expected_role:
             raise ValueError('Upstream calibration_role contradicts the source and target versions')
         lookup[sample, version, seed] = row
-        if row["status"] != "no_seeds":
+        if row["status"] != "no_seeds" and not (global_mode and seed == "__no_seeds__"):
             observed[sample].add(seed)
     universe = {sample: samples[sample].get("upstream_seed_ids", sorted(observed[sample])) for sample in samples}
     for sample in samples:
@@ -392,6 +401,13 @@ def _upstream(records, samples, targets, ref, alpha, decision_alpha, minimum, ma
                                source_control_cnvkit_version=control.get('cnvkit_version'),
                                retention_difference=(float(row['status'] == 'retained') - float(control['status'] == 'retained')
                                                      if paired else None))
+                    if global_mode:
+                        row['source_locus_present'] = control['status'] == 'retained' if _upstream_evaluable(control) else None
+                        row['locus_discordance'] = None
+                        if row['evaluable'] and _upstream_evaluable(control) and context and context == _upstream_context(control):
+                            own, other = row['status'] == 'retained', row['source_locus_present']
+                            if own or other:
+                                row['locus_discordance'] = float(own != other)
                     rows.append(row)
                     seed_rows.append(row)
                 valid = [r for r in rows if r["evaluable"]]
@@ -417,9 +433,31 @@ def _upstream(records, samples, targets, ref, alpha, decision_alpha, minimum, ma
                             native_recipe_statuses=sorted({"matched" if r.get("native_recipe_match") is True else "controlled" if r.get("native_recipe_match") is False else "unverified" for r in rows}),
                             cnvkit_versions=sorted({str(r["cnvkit_version"]) for r in valid}),
                             interpretation="descriptive_known_candidate_retention; not_genome_wide_sensitivity")
+                if global_mode:
+                    from .concordance_upstream_similarity import native_seed_comparison
+                    candidate_rows = {r['seed_id']: r for r in rows}
+                    source_rows = {seed: lookup.get((sample, source, seed), {}) for seed in candidate_rows}
+                    comparable = bool(ids) and all(
+                        r['evaluable'] and _upstream_evaluable(source_rows[key])
+                        and _upstream_context(r) is not None and _upstream_context(r) == _upstream_context(source_rows[key])
+                        for key, r in candidate_rows.items())
+                    item.update(native_seed_comparison(candidate_rows, source_rows, seed_match_fraction, comparable))
+                    informative = [r for r in rows if r.get('locus_discordance') is not None]
+                    item.update(global_scope=True,
+                        no_seeds=(samples[sample].get('global_seed_sets', {}).get(target, {}).get('status') == 'ok'
+                                  and not samples[sample]['global_seed_sets'][target]['seeds']),
+                        interpretation='version_native_seed_presence_at_global_panel_union_loci',
+                        native_seed_count=(len(samples[sample]['global_seed_sets'][target]['seeds'])
+                            if samples[sample].get('global_seed_sets', {}).get(target, {}).get('status') == 'ok' else None),
+                        informative_pair_loci=len(informative),
+                        locus_discordance=_mean([r['locus_discordance'] for r in informative]),
+                        extra_loci=sum(1 for r in informative if r['locus_discordance'] and not r['source_locus_present']),
+                        missed_loci=sum(1 for r in informative if r['locus_discordance'] and r['source_locus_present']))
                 local.append(item)
                 sample_rows.append(item)
             sample_losses = {r['sample_id']: r['seed_loss'] for r in local if r['seed_loss'] is not None}
+            if global_mode:
+                sample_losses = {r['sample_id']: r[GLOBAL_METRIC] for r in local if r[GLOBAL_METRIC] is not None}
             values = _independent_means(sample_losses, patient_ids).tolist()
             sample_deltas = {r['sample_id']: r['retention_difference'] for r in local if r['retention_difference'] is not None}
             differences = _independent_means(sample_deltas, patient_ids).tolist()
@@ -431,6 +469,8 @@ def _upstream(records, samples, targets, ref, alpha, decision_alpha, minimum, ma
             if len(values) < minimum: reasons.append("too_few_independent_units")
             if any(r["unavailable_seeds"] or r["seed_loss"] is None for r in local): reasons.append("unavailable_or_no_candidate_samples")
             if any(not r["candidate_universe_declared"] for r in local): reasons.append("candidate_universe_not_declared")
+            if global_mode and any(r[GLOBAL_METRIC] is None for r in local):
+                reasons.append('missing_paired_native_seed_sets_or_both_empty')
             candidate_versions = {v for r in local for v in r['cnvkit_versions']}
             control_versions = {v for r in local for v in r['source_control_cnvkit_versions']}
             if any(len(r["cnvkit_versions"]) > 1 for r in local): reasons.append("multiple_cnvkit_versions_within_sample_target")
@@ -455,7 +495,7 @@ def _upstream(records, samples, targets, ref, alpha, decision_alpha, minimum, ma
             if primary and values and margin is not None:
                 p_bound = math.exp(-2*len(values)*(float(margin)-_mean(values))**2) if _mean(values) < float(margin) else 1.
             statistics.append(dict(reference_version=ref, source_version=source, target_version=target,
-                metric="known_candidate_not_retained_fraction", estimate=_mean(values),
+                metric=GLOBAL_METRIC if global_mode else "known_candidate_not_retained_fraction", estimate=_mean(values),
                 conservative_ci_low=low, conservative_ci_high=high, confidence_level=1-alpha,
                 agreement_lower=decision_low, agreement_upper=decision_high,
                 agreement_alpha=adjusted_alpha if primary else None, primary_pair=primary,
@@ -469,18 +509,22 @@ def _upstream(records, samples, targets, ref, alpha, decision_alpha, minimum, ma
                 calibration_passed=control_passed,
                 observed_statuses=sorted({status for r in local for status in r['status_counts']}),
                 calibration_statuses=sorted({c for r in local for c in r["calibration_statuses"]}),
-                calibration_basis='independent_same_version_source_control',
+                calibration_basis='original_source_full_seed_bed_reproduction' if global_mode else 'independent_same_version_source_control',
                 source_control_recipe_match=control_recipe,
                 source_control_cnvkit_versions=sorted(control_versions),
                 paired_context_complete=contexts_matched,
                 native_recipe_match=native,
                 native_recipe_statuses=sorted({v for r in local for v in r["native_recipe_statuses"]}),
                 p_agreement_bound=p_bound,
-                comparison_scope=f"known_candidate_seed_retention_only; {unit}_equal_weight; no_genome_wide_detection_validation"))
+                comparison_scope=GLOBAL_SCOPE if global_mode else f"known_candidate_seed_retention_only; {unit}_equal_weight; no_genome_wide_detection_validation"))
+            if global_mode:
+                statistics[-1].update(seed_match_fraction=seed_match_fraction, informative_pair_loci=sum(r['informative_pair_loci'] for r in local),
+                                      extra_loci=sum(r['extra_loci'] for r in local),
+                                      missed_loci=sum(r['missed_loci'] for r in local))
     return seed_rows, sample_rows, statistics
 
 
-def _combine(downstream, upstream, mode, samples):
+def _combine(downstream, upstream, mode, samples, global_mode=False):
     lookup = {(r["source_version"], r["target_version"]): r for r in upstream}
     result = []
     for down in downstream:
@@ -490,22 +534,24 @@ def _combine(downstream, upstream, mode, samples):
         basis = ["downstream_metrics_exceed_margin"] if decision == "exceeds_margin" else ["downstream_metrics_within_margin"] if decision == "within_margin" else []
         scope = "conditional_local_upstream_and_fixed_seed_aa_ac" if includes_upstream else "ac_only_on_fixed_source_aa" if down["analysis_kind"] == "ac_only" else "provided_downstream_aa_ac_results_only"
         if includes_upstream:
+            if global_mode:
+                scope = GLOBAL_SCOPE
             upstream_validated = bool(up and up['calibration_passed'] and up['source_control_recipe_match']
                                       and up['native_recipe_match'] and up['paired_context_complete'])
             basis = ["downstream_metrics_exceed_margin"] if down["decision"] == "exceeds_margin" else []
             if up and up["decision"] == "exceeds_margin" and upstream_validated:
-                basis.append("local_upstream_exceeds_margin_after_source_control")
+                basis.append("global_upstream_exceeds_margin_after_source_control" if global_mode else "local_upstream_exceeds_margin_after_source_control")
             if basis:
                 decision = "exceeds_margin"
             elif down["decision"] == "within_margin" and up and up["decision"] == "within_margin" and upstream_validated:
                 decision = "within_margin"
-                basis = ["downstream_and_local_upstream_within_margin_after_source_control"]
+                basis = ["downstream_and_global_upstream_within_margin_after_source_control" if global_mode else "downstream_and_local_upstream_within_margin_after_source_control"]
             else:
                 decision = "insufficient_evidence"
             reasons += up["reasons"] if up else ["upstream_results_missing"]
             if up and up["decision"] == "exceeds_margin" and not upstream_validated:
                 reasons.append("upstream_exceedance_not_validated_by_independent_source_control")
-            if not up or not up["calibration_passed"]: reasons.append("local_upstream_calibration_not_passed")
+            if not up or not up["calibration_passed"]: reasons.append("original_global_source_seed_set_not_reproduced" if global_mode else "local_upstream_calibration_not_passed")
             if not up or not up['source_control_recipe_match']: reasons.append('source_control_recipe_not_verified')
             if not up or not up['paired_context_complete']: reasons.append('upstream_paired_candidate_scope_incomplete_or_different')
             if not up or not up["native_recipe_match"]:
@@ -516,6 +562,13 @@ def _combine(downstream, upstream, mode, samples):
         if mode == "with_bam" and not bridge_passed:
             decision, basis = "insufficient_evidence", []
             reasons.append("input_source_to_rerun_bridge_not_passed")
+        limited = global_mode and any(
+            s.get('global_seed_sets', {}).get(version, {}).get('historical_provenance_limited', False)
+            for s in samples.values() if s['source_version'] == down['source_version']
+            for version in (down['source_version'], down['target_version']))
+        if limited:
+            decision, basis = "insufficient_evidence", []
+            reasons.append("historical_global_cnv_computation_provenance_limited")
         if not down['primary_pair'] and not down['identity_anchor']:
             decision, basis = 'insufficient_evidence', []
         result.append(dict(reference_version=down["reference_version"], source_version=down["source_version"],
@@ -534,7 +587,7 @@ def _combine(downstream, upstream, mode, samples):
             signal_independent_units=down['signal_independent_units'], independence_unit=down['independence_unit'],
             primary_pair=down['primary_pair'],
             compatibility_metric_scope=down["compatibility_metric_scope"],
-            not_established=["genome_wide_seed_discovery", "complete_suite_interchangeability", "biological_truth", "cycle_order_or_breakpoint_topology"]
+            not_established=["biological_seed_discovery_accuracy" if global_mode else "genome_wide_seed_discovery", "complete_suite_interchangeability", "biological_truth", "cycle_order_or_breakpoint_topology"]
                 + (["aa_reconstruction_compatibility"] if down["analysis_kind"] == "ac_only" else [])))
     return result
 
@@ -550,7 +603,9 @@ def _sample_ladders(out, sample_rows, ref, mode, synthetic, upstream_samples=Non
              "blocked": "B", "no_seeds": "NS", "not_run": "NR"}
     for (sample, kind, source), rows in groups.items():
         has_upstream = mode == 'with_bam' and kind == 'aa_ac'
-        fig, axes = plt.subplots(1, 7 if has_upstream else 4,
+        global_mode = any(r.get('global_scope') for r in (upstream_samples or []))
+        panels = (6 if global_mode else 7) if has_upstream else 4
+        fig, axes = plt.subplots(1, panels,
                                  figsize=(23 if has_upstream else 14, max(4.6, .48*len(rows)+2.6)), sharey=True)
         labels = [r["target_version"] + (" [source]" if r["target_version"] == source else "")
                   + (" [ref]" if r["target_version"] == ref else "")
@@ -585,22 +640,24 @@ def _sample_ladders(out, sample_rows, ref, mode, synthetic, upstream_samples=Non
                 f"signal={row['n_signal_units']}  +{row.get('extra_detection', 0)} / -{row.get('missed_detection', 0)}  class={row.get('class_change', 0)}",
                 fontsize=6, color='#666666')
         if has_upstream:
-            source_ax, sim_ax, ax = axes[-3:]
+            sim_ax, ax = axes[-2:]
+            source_ax = None if global_mode else axes[-3]
             baseline = None
             for y, row in enumerate(rows):
                 up = upstream_lookup.get((sample, source, row['target_version']))
                 matched = (up or {}).get('source_matched_cnv') or {}
                 baseline = matched.get('source_cnvkit_version') or baseline
                 matched_value = matched.get('interval_jaccard')
-                if matched_value is None:
-                    source_ax.axhspan(y-.33, y+.33, color='#eeeeee', zorder=0)
-                    state = 'both empty' if matched.get('status') == 'both_empty' else 'NA'
-                    source_ax.text(.5, y, state, ha='center', va='center', fontsize=7)
-                else:
-                    source_ax.scatter(matched_value, y, marker='D' if matched.get('identity_anchor') else 'o',
-                                      s=25, color='#315e77')
-                    source_ax.text(.5, y+.24, f"CNVkit {matched['target_cnvkit_version']} · {matched_value:.1%}",
-                                   ha='center', fontsize=6)
+                if source_ax is not None:
+                    if matched_value is None:
+                        source_ax.axhspan(y-.33, y+.33, color='#eeeeee', zorder=0)
+                        state = 'both empty' if matched.get('status') == 'both_empty' else 'NA'
+                        source_ax.text(.5, y, state, ha='center', va='center', fontsize=7)
+                    else:
+                        source_ax.scatter(matched_value, y, marker='D' if matched.get('identity_anchor') else 'o',
+                                          s=25, color='#315e77')
+                        source_ax.text(.5, y+.24, f"CNVkit {matched['target_cnvkit_version']} · {matched_value:.1%}",
+                                       ha='center', fontsize=6)
                 sim = up.get('upstream_interval_jaccard') if up else None
                 if sim is None:
                     sim_ax.axhspan(y-.33, y+.33, color='#eeeeee', zorder=0)
@@ -628,11 +685,12 @@ def _sample_ladders(out, sample_rows, ref, mode, synthetic, upstream_samples=Non
             ax.set_xlim(-.03, 1.03); ax.set_ylim(len(rows)-.5, -.5)
             ax.set_xticks([0, .5, 1], ['0', '50', '100'])
             sim_ax.set_xlim(-.03, 1.03); sim_ax.set_xticks([0, .5, 1], ['0', '50', '100'])
-            source_ax.set_xlim(-.03, 1.03); source_ax.set_xticks([0, .5, 1], ['0', '50', '100'])
-            source_ax.set_xlabel(f'Local CNVkit vs {baseline or "unknown"}\nseed Jaccard (%)')
-            source_ax.grid(axis='x', color='#eeeeee')
+            if source_ax is not None:
+                source_ax.set_xlim(-.03, 1.03); source_ax.set_xticks([0, .5, 1], ['0', '50', '100'])
+                source_ax.set_xlabel(f'Local CNVkit vs {baseline or "unknown"}\nseed Jaccard (%)')
+                source_ax.grid(axis='x', color='#eeeeee')
             sim_ax.set_xlabel('Suite recipe seed Jaccard (%)'); sim_ax.grid(axis='x', color='#eeeeee')
-            ax.set_xlabel('Known candidates retained (%)'); ax.grid(axis='x', color='#eeeeee'); ax.set_axisbelow(True)
+            ax.set_xlabel('Union loci with native seeds (%)' if global_mode else 'Known candidates retained (%)'); ax.grid(axis='x', color='#eeeeee'); ax.set_axisbelow(True)
         axes[0].set_yticks(range(len(rows)), labels)
         fig.suptitle(f'Sample: {sample} | Input-source comparator: {source} | Fixed reference: {ref}\n'
                      + _kind_label(kind, mode) + " | observed signal-positive input units"
@@ -654,6 +712,7 @@ def _upstream_ladder(out, upstream, ref, mode, synthetic):
     if not sources or mode != "with_bam": return
     longest = max(sum(r["source_version"] == s for r in upstream) for s in sources)
     fig, axes = plt.subplots(len(sources), 1, figsize=(9, max(4., len(sources)*(.37*longest+1.4)+1.2)), squeeze=False)
+    global_mode = any(r.get("metric") == GLOBAL_METRIC for r in upstream)
     for ax, source in zip(axes.flat, sources):
         rows = [r for r in upstream if r["source_version"] == source]
         for y, row in enumerate(rows):
@@ -676,13 +735,13 @@ def _upstream_ladder(out, upstream, ref, mode, synthetic):
                                        + (" [ref]" if r["target_version"] == ref else "") for r in rows])
         ax.set_ylim(len(rows)-.5, -.5); ax.set_xlim(-.03, 1.03)
         ax.set_xticks([0, .25, .5, .75, 1], ["0", "25", "50", "75", "100"])
-        ax.set_xlabel("Known candidates retained (%)"); ax.grid(axis="x", color="#eeeeee"); ax.set_axisbelow(True)
-        ax.set_title(f"Input-source candidate set: {source}", fontsize=9, loc="left")
+        ax.set_xlabel("Lower directional native-seed retention (%)" if global_mode else "Known candidates retained (%)"); ax.grid(axis="x", color="#eeeeee"); ax.set_axisbelow(True)
+        ax.set_title(f"Source version: {source}", fontsize=9, loc="left")
     confidence = upstream[0]["confidence_level"]*100
-    fig.suptitle(f'Known-candidate retention | Fixed reference: {ref}\nBounded local upstream; not genome-wide detection sensitivity'
+    fig.suptitle((f'Global native-seed retention | Fixed reference: {ref}' if global_mode else f'Known-candidate retention | Fixed reference: {ref}\nBounded local upstream; not genome-wide detection sensitivity')
                  + (' | SYNTHETIC TEST DATA' if synthetic else ''), fontsize=11)
     unit = upstream[0]['independence_unit']
-    fig.text(.5, .015, f'Equal-weight {unit} means and conservative {confidence:g}% bounds. Source control is an observed local result.\nSRC?/SRC! unverified/failed source control; PAIR? incomplete matched candidates; CTRL/NATIVE? controlled/unverified recipe.', ha="center", fontsize=6.5)
+    fig.text(.5, .015, f'Equal-weight {unit} means and conservative {confidence:g}% bounds. Source control is an observed result.\nSRC?/SRC! unverified/failed source control; PAIR? incomplete matched candidates; CTRL/NATIVE? controlled/unverified recipe.', ha="center", fontsize=6.5)
     fig.tight_layout(rect=[0, .09, 1, 1])
     for ext in ("png", "pdf", "svg"): fig.savefig(out / f"upstream_retention_ladder.{ext}", dpi=170, bbox_inches="tight")
     plt.close(fig)
@@ -782,11 +841,11 @@ def _plots(out, downstream, combined, ref, mode, synthetic, sample_rows=None, up
     ax.set_xticks(range(len(targets)), targets, rotation=30, ha="right")
     ax.set_yticks(range(len(groups)), [f'{k}\nsource: {s}' for k, s in groups])
     ax.set_title(f'Conditional compatibility decisions | Fixed reference: {ref}\n{mode}; AC-only excludes AA; no genome-wide/full-Suite claim'+(' | SYNTHETIC TEST DATA' if synthetic else ''), fontsize=10)
-    fig.text(.5, .01, "Missing margins, unavailable results or unverified local calibration prevent a combined compatibility claim. Single-sample similarity is not equivalence.", ha="center", fontsize=7)
+    fig.text(.5, .01, "Missing margins, unavailable results or unverified source calibration prevent a combined compatibility claim. Single-sample similarity is not equivalence.", ha="center", fontsize=7)
     fig.tight_layout(rect=[0, .06, 1, 1])
     for extension in ("png", "pdf", "svg"): fig.savefig(out / f"compatibility_table.{extension}", dpi=170, bbox_inches="tight")
     plt.close(fig)
-    if mode == "with_bam":
+    if mode == "with_bam" and not any(r.get("metric") == GLOBAL_METRIC for r in upstream or []):
         _local_cnv_cohort_plot(out, matched_cohort or [], ref, synthetic)
     _upstream_ladder(out, upstream or [], ref, mode, synthetic)
     return _sample_ladders(out, sample_rows or [], ref, mode, synthetic, upstream_samples)
@@ -826,7 +885,7 @@ def _report_effects(downstream, upstream, mode, independence_unit):
                       f"{row['detection_difference_n_regions']} / {row['expected_regions']} | {row['detection_difference_n_independent_units']} | {scope} |")
     header += ["", "检出 Δ 使用该版本对的全部可评价单元。新增和遗漏是原始单元计数。分类改变限于双方检出且至少有共同可比类别的单元。各版本对的缺失或有信号分母可能不同，不能把这些结果直接当作共同队列的排名。"]
     if mode == 'with_bam':
-        header += ["", "| 来源 → 目标 | 已知候选保留 Δ [区间] | 置信水平 | 双方可配对 / 应评价 | 独立单位数 |",
+        header += ["", "| 来源 → 目标 | 位点保留 Δ [区间] | 置信水平 | 双方可配对 / 应评价 | 独立单位数 |",
                    "|---|---:|---:|---:|---:|"]
         for row in upstream:
             if row['source_version'] == row['target_version']:
@@ -851,6 +910,7 @@ def write_concordance_reports(out, downstream_records, upstream_records, config,
     AC-only records require a common nonempty source_graph_identity per unit.
     """
     ref, targets, samples, options, alpha, minimum, margin = _configuration(config)
+    global_mode = config["mode"] == "with_bam" and config.get("cnv_scope") == "global"
     downstream_records, upstream_records = list(downstream_records), list(upstream_records)
     kinds = {r.get("analysis_kind") for r in downstream_records} or {"aa_ac" if config["mode"] == "with_bam" else "ac_only"}
     if any(k not in KINDS for k in kinds): raise ValueError("analysis_kind must be aa_ac or ac_only")
@@ -863,16 +923,16 @@ def write_concordance_reports(out, downstream_records, upstream_records, config,
     # analyzer controls its version pairs and four primary metrics internally.
     group_alpha = alpha / (len(groups)+1)
     out = Path(out); out.mkdir(parents=True, exist_ok=True)
-    downstream, sample_rows, links = _downstream(out, groups, targets, ref, options, group_alpha, config["mode"], synthetic)
+    downstream, sample_rows, links = _downstream(out, groups, targets, ref, options, group_alpha, config["mode"], synthetic, global_mode)
     seeds, upstream_samples, upstream = _upstream(upstream_records, samples, targets, ref, alpha, group_alpha, minimum, margin,
-                                                  patient_ids, options.get('primary_pairs'))
+                                                  patient_ids, options.get('primary_pairs'), global_mode, config.get('seed_match_fraction', 1.0))
     from .concordance_downstream import write_downstream_similarity
     from .concordance_result import write_result
     from .concordance_upstream_similarity import upstream_similarity_rows, upstream_similarity_cohort_rows
     down_similarity = write_downstream_similarity(out, groups, targets, ref, patient_ids, synthetic, alpha)
     up_pairs = []
     if config['mode'] == 'with_bam':
-        up_pairs = upstream_similarity_rows(seeds, upstream_samples, ref)
+        up_pairs = upstream_similarity_rows(seeds, upstream_samples, ref, config.get('seed_match_fraction', 1.0))
         for row in up_pairs:
             row['synthetic'] = synthetic
         up_cohort = upstream_similarity_cohort_rows(up_pairs, patient_ids, alpha)
@@ -887,13 +947,13 @@ def write_concordance_reports(out, downstream_records, upstream_records, config,
             sample_row.update(upstream_interval_jaccard=pair['upstream_interval_jaccard'],
                               upstream_similarity_status=pair['upstream_similarity_status'])
     from .concordance_local_cnv_report import write_local_cnv_comparator
-    matched = write_local_cnv_comparator(out, local_cnv_records, config, patient_ids, alpha, synthetic)
+    matched = dict(samples=[], seeds=[], cohort=[], status="not_applicable_global_workflow") if global_mode else write_local_cnv_comparator(out, local_cnv_records, config, patient_ids, alpha, synthetic)
     matched_by_suite = {(row['sample_id'], suite): row for row in matched['samples']
                         for suite in row['target_suite_versions']}
     plot_upstream_samples = [dict(row, source_matched_cnv=matched_by_suite.get((row['sample_id'], row['target_version'])))
                              for row in upstream_samples]
-    result = write_result(out, down_similarity['samples'], up_pairs, config['mode'], ref, synthetic, matched['samples'])
-    combined = _combine(downstream, upstream, config["mode"], samples)
+    result = write_result(out, down_similarity['samples'], up_pairs, config['mode'], ref, synthetic, matched['samples'], global_mode=global_mode)
+    combined = _combine(downstream, upstream, config["mode"], samples, global_mode)
     from .concordance_cohort_plot import cohort_metric_rows, plot_cohort_compatibility
     cohort_rows = cohort_metric_rows(downstream, combined, upstream)
     for row in cohort_rows: row['synthetic'] = synthetic
@@ -928,11 +988,11 @@ def write_concordance_reports(out, downstream_records, upstream_records, config,
                    independence_unit=unit, selected_independent_units=len(set(patient_ids.values())) if patient_ids is not None else len(samples),
                    primary_pairs=options.get('primary_pairs'), plot_error=plot_error,
                    sample_plot_index=sample_plots, cohort_compatibility_metrics=cohort_rows,
-                   scope="conditional known-candidate comparison; never complete Suite or genome-wide compatibility",
+                   scope=GLOBAL_SCOPE if global_mode else "conditional known-candidate comparison; never complete Suite or genome-wide compatibility",
                    report=str(out / "report.md"))
     _json(out / "summary.json", summary)
     lines = ["# AmpliconSuite Cross-Version Concordance", "", f"固定参考：**{ref}**；模式：`{config['mode']}`；输入样本：{len(samples)}。",
-             "", "**人工合成测试数据：不形成患者或生物学结论。**" if synthetic else "这是所提供输入、已知候选区域和已评价指标的条件性比较。", ""]
+             "", "**人工合成测试数据：不形成患者或生物学结论。**" if synthetic else "本次比较覆盖各版全局种子和抽样位点的重建结果。" if global_mode else "这是所提供输入、已知候选区域和已评价指标的条件性比较。", ""]
     if options.get('primary_pairs') == []:
         lines += ["**探索性分析：未指定主要版本对，不作正式兼容判定。**", ""]
     else:
@@ -942,16 +1002,16 @@ def write_concordance_reports(out, downstream_records, upstream_records, config,
                       f"{outcomes['exceeds_margin']} 项超出预设范围，"
                       f"{outcomes['insufficient_evidence']} 项证据不足。每项按分析类型、来源和目标计数。", ""]
     lines += ["[查看逐样本结果、上下游相似性和标签一致率](result.md) · [下载 result.tsv](result.tsv)", ""]
-    if config['mode'] == 'with_bam':
+    if config['mode'] == 'with_bam' and not global_mode:
         lines += ["输入样本原用 CNVkit 的局部重跑是该样本的 CNVkit 对照。各版共用输入来源的 AA 筛种器。"
                   "[逐样本 CNVkit 对照](local_cnv_comparator_samples.tsv) · [按患者或样本汇总](local_cnv_comparator_cohort.tsv) · "
                   "[逐候选保留与区段](local_cnv_comparator_seeds.tsv)", ""]
-    if config["mode"] == "with_bam" and (out / "local_cnv_comparator_cohort.png").is_file():
+    if config["mode"] == "with_bam" and not global_mode and (out / "local_cnv_comparator_cohort.png").is_file():
         lines += ["![局部 CNVkit 版本对照与描述性区间](local_cnv_comparator_cohort.png)", ""]
     lines += down_similarity["report_lines"] + [""]
     if config["mode"] == "with_bam":
         lines += ["", "### 来源对照", "",
-                  "| 样本 | 来源 Suite | 原结果与同版重建 | 输入来源 CNVkit | 来源 Suite 配方实际 CNVkit | 配方对原始候选的校准 |",
+                  "| 样本 | 来源 Suite | 原结果与同版重建 | 输入来源 CNVkit | 来源 Suite 配方实际 CNVkit | 来源种子校准 |",
                   "|---|---|---|---|---|---|"]
         controls = {(r["sample_id"], r["target_version"]): r for r in upstream_samples}
         for sid, spec in samples.items():
@@ -960,19 +1020,30 @@ def write_concordance_reports(out, downstream_records, upstream_records, config,
             calibration = ", ".join(control["calibration_statuses"]) or "unverified"
             lines.append(f"| {sid} | {spec['source_version']} | {spec.get('source_bridge_status', 'unverified')} | "
                          f"{spec.get('source_cnvkit_version') or '未记录'} | {versions} | {calibration} |")
-        lines += ["", "来源复现有差异时，先对照原始和重建的 AA 区段、graph、cycles 及 AC feature BED，再固定同一套图做同版本 AC 参数对照。"
-                  "局部 CNV 校准先用已保存的 CNR、CNS 在相同可测坐标配对；再单独使用已核实的原 CNVkit 版本、参考策略和种子筛选规则做来源对照。"
-                  "校准状态及原因可在 [逐种子记录](upstream_seeds.tsv) 中核对。", ""]
+        if global_mode:
+            lines += ["", "对照本样本原始种子 BED 与来源配方重新筛选的全套种子，另核对抽中位点的原始与重建 AA/AC 结果。来源版本或配方缺少证据时保留为未核实。", ""]
+        else:
+            lines += ["", "来源复现有差异时，先对照原始和重建的 AA 区段、graph、cycles 及 AC feature BED，再固定同一套图做同版本 AC 参数对照。"
+                      "局部 CNV 校准先用已保存的 CNR、CNS 在相同可测坐标配对；再单独使用已核实的原 CNVkit 版本、参考策略和种子筛选规则做来源对照。"
+                      "校准状态及原因可在 [逐种子记录](upstream_seeds.tsv) 中核对。", ""]
     lines += _report_effects(downstream, upstream, config['mode'], unit)
+    if global_mode:
+        lines += ["", "## 全局种子与下游的评价范围", "",
+                  "各版按原生配方完成全基因组 CNV 分段和种子筛选。报告把成功版本至少有一版发现的种子按严格重叠连成共同位点；边界相邻的种子分属不同位点。共享位点可容纳种子的拆分或合并。报告另列逐版原生种子条数、另一版种子区段覆盖达到 seed_match_fraction 的条数与比例，以及完整区段覆盖碱基 Jaccard。",
+                  "", "上游主指标取两个方向原生种子未保留率的较大值。每个方向逐条检查本版原生种子被另一版种子覆盖的比例是否达到 seed_match_fraction。仅一版有种子时失配为 100%，双方都空或任一方失败时留空。upstream_loss_margin 约束这个失配值，位点存在差和区段 Jaccard 单独作为描述指标。",
+                  "", "下游从所有版本共同的位点并集中抽样，各版使用其落在抽中位点的原生种子运行 AA＋AC，保留延伸至其他位点的完整重建结构。下游差异可来自筛种、重建及分类。失败或缺失记录保留为未评价。",
+                  "", "联合判断要求原数据来源复现及配方证据。观察范围是所分析样本、实际完成的全局筛种以及抽中位点的下游指标。基因组种子发现的生物学准确性需要独立真值。"]
+    else:
+        lines += [
+                 "", "各表按输入来源 Suite 分层，比较该来源与每个目标版本；同时在分层子报告中保留固定参考和其他版本间比较。输入来源自身只作身份锚点，不能作为独立验证。",
+                 "", "## 下游与上游分别解读", "", "with_bam 的 AA＋AC 使用同一组输入种子；results_only 的 AA＋AC 项只比较既有输出指标。仅 AC 使用相同来源 AA 输出，不能称为 AA 重建兼容。源数据与重跑数据的输入范围必须已核实，`comparison_eligible` 不明确为 true 的结果保留为不可评价。AC-only 还须记录一致的 source_aa_version 和 source_graph_identity；相同 AA 版本但不同图文件不构成固定输入。",
+                 "", "上游同时报告原候选内两版最终种子区段的 Jaccard，以及目标版本的保留个数/可评价候选数。未保留比例是主失配指标；retention_fraction 仅解释覆盖和匹配。匹配规则不是兼容阈值。候选全集未声明时无法发现全部版本共同漏记的种子，不能给出上游兼容结论。",
+                 "", "with_bam 的联合结论要求上游、固定种子 AA＋AC 均在预设范围内。上游还要求独立的同版本来源复现通过、来源和目标的 CNVkit 配方匹配，并对全部候选核对相同坐标、参考策略和匹配规则。目标版本的保留结果不作为校准依据，目标漏种仍可支持有条件的超差结论。",
+                 "", "with_bam 还要求每例原导入结果与同一来源 Suite 的种子重跑结果完成来源桥接，source_bridge_status 必须为 passed；否则原数据的联合判定无论接受或超差均为证据不足，分项观察仍保留。桥接通过仅表示所检查的检出、分类与区段指标一致，不是生物学真实性或完整结构相同的证明。既有结果未证明参数、资源及运行条件相同，观察差异不能自动归因于 AA 算法版本。",
+                 "", "上游配方受控或缺少可核查的独立来源控制时，仍报告描述性保留率和配对差。来源桥接通过后，可靠的 AA＋AC 指标超差可以独立支持该下游范围的超差。decision_basis 指明本次判定依据。联合结果覆盖局部候选保留和固定种子 AA＋AC 两个步骤。",]
     lines += [
-             "", "各表按输入来源 Suite 分层，比较该来源与每个目标版本；同时在分层子报告中保留固定参考和其他版本间比较。输入来源自身只作身份锚点，不能作为独立验证。",
-             "", "## 下游与上游分别解读", "", "with_bam 的 AA＋AC 使用同一组输入种子；results_only 的 AA＋AC 项只比较既有输出指标。仅 AC 使用相同来源 AA 输出，不能称为 AA 重建兼容。源数据与重跑数据的输入范围必须已核实，`comparison_eligible` 不明确为 true 的结果保留为不可评价。AC-only 还须记录一致的 source_aa_version 和 source_graph_identity；相同 AA 版本但不同图文件不构成固定输入。",
-             "", "上游同时报告原候选内两版最终种子区段的 Jaccard，以及目标版本的保留个数/可评价候选数。未保留比例是主失配指标；retention_fraction 仅解释覆盖和匹配。匹配规则不是兼容阈值。候选全集未声明时无法发现全部版本共同漏记的种子，不能给出上游兼容结论。",
-             "", "with_bam 的联合结论要求上游、固定种子 AA＋AC 均在预设范围内。上游还要求独立的同版本来源复现通过、来源和目标的 CNVkit 配方匹配，并对全部候选核对相同坐标、参考策略和匹配规则。目标版本的保留结果不作为校准依据，目标漏种仍可支持有条件的超差结论。",
-             "", "with_bam 还要求每例原导入结果与同一来源 Suite 的种子重跑结果完成来源桥接，source_bridge_status 必须为 passed；否则原数据的联合判定无论接受或超差均为证据不足，分项观察仍保留。桥接通过仅表示所检查的检出、分类与区段指标一致，不是生物学真实性或完整结构相同的证明。既有结果未证明参数、资源及运行条件相同，观察差异不能自动归因于 AA 算法版本。",
-             "", "上游配方受控或缺少可核查的独立来源控制时，仍报告描述性保留率和配对差。来源桥接通过后，可靠的 AA＋AC 指标超差可以独立支持该下游范围的超差。decision_basis 指明本次判定依据。联合结果覆盖局部候选保留和固定种子 AA＋AC 两个步骤。",
              "", "## 统计与证据边界", "", "先对样本内种子取平均。有患者标识时，对患者内样本取平均并按患者等权。未提供患者标识时按样本等权，前提是样本独立。区间保留零观察失配时的不确定性。各分析分层与上游分配误差预算，主要版本对的判定另作 Bonferroni 校正。探索性比较报告观察差异和区间。",
-             "", "容忍阈值未预设、独立样本不足、未知/失败或局部校准未验证时，联合接受结论为证据不足；P>0.05不表示兼容。单样本表只描述观察相似度，不给等效判断。全阴性区域不计为结构一致证据，有信号结果单列。",
+             "", "容忍阈值未预设、独立样本不足、未知/失败或来源校准未验证时，联合接受结论为证据不足；P>0.05不表示兼容。单样本表只描述观察相似度，不给等效判断。全阴性区域不计为结构一致证据，有信号结果单列。",
              "", "[逐样本相似度](sample_similarity.tsv) · [下游汇总](downstream_summary.tsv) · [上游逐种子](upstream_seeds.tsv) · [上游逐样本](upstream_samples.tsv) · [上游统计](upstream_statistics.tsv) · [联合兼容表](compatibility_combined.tsv)", "",
              "![版本相似性天梯图](similarity_ladder.png)", "", "![整组统计兼容图](cohort_compatibility.png)", "",
              "整组统计兼容图显示差异大小、区间、预设阈值、独立单位数与联合判定；[绘图数据](cohort_compatibility_metrics.tsv)。主要比较使用与判定相同的多重校正单侧置信界，探索性比较仅显示描述性区间。", "",
@@ -980,7 +1051,10 @@ def write_concordance_reports(out, downstream_records, upstream_records, config,
     lines += ["逐样本天梯图见 [全部样本图](sample_reports.md) 和 [TSV索引](sample_plot_index.tsv)：每个样本×分析类型一张，标记输入来源与固定参考；灰色不可评价项不补为零。单样本只显示观察相似度，不给置信区间或等效判断。CLASS* 表示类别支持不同或未知，相关标签与类别区段指标灰显；表中保留 full_label_comparable、共同支持类别及限定类别范围的观察值，不能把它们解释为完整标签100%一致。", ""]
     lines += [f"- {r['sample_id']} / {r['analysis_kind']}：[PNG](<{r['png']}>) · [PDF](<{r['pdf']}>) · [SVG](<{r['svg']}>)" for r in sample_plots[:20]]
     if config["mode"] == "with_bam":
-        lines += ["", "![已知候选种子保留率](upstream_retention_ladder.png)", "", "上游图显示候选保留率及独立单位等权区间。SRC?/SRC! 标明来源对照未知或失败，PAIR? 标明配对候选范围不完整，CTRL/NATIVE? 标明受控或未验证配方。", ""]
+        if global_mode:
+            lines += ["", "![两个方向较低的原生种子保留率](upstream_retention_ladder.png)", ""]
+        else:
+            lines += ["", "![已知候选种子保留率](upstream_retention_ladder.png)", "", "上游图显示候选保留率及独立单位等权区间。SRC?/SRC! 标明来源对照未知或失败，PAIR? 标明配对候选范围不完整，CTRL/NATIVE? 标明受控或未验证配方。", ""]
     lines += [f"- [{r['analysis_kind']} / 输入来源 {r['source_version']}](<{r['path']}>)" for r in links]
     if plot_error: lines += ["", "绘图依赖缺失；表格已保存：" + plot_error]
     (out / "report.md").write_text("\n".join(lines)+"\n", encoding="utf-8")

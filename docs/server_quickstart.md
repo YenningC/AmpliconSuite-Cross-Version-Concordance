@@ -26,9 +26,13 @@ asconcordance run --manifest concordance.results_only.json --out /output/existin
 
 同一样本的其他版本输出放在comparison_results列表中。若只有一个版本输出，其他AA版本明确未验证；要比较AC，使用concordance.ac_only.json配置参考资源和AC解释器/源码。
 
-## 有BAM，局部上下游
+## 有 BAM 的运行范围
 
-使用concordance.with_bam.json。每例提供已有种子BED、原AA/AC目录、来源Suite版本、BAM和现有索引。上游需明确背景BED。默认matched_normal参考模式还需配对正常BAM；只有肿瘤BAM时可明确设 `local_cnv.reference_mode: "flat"` 并去掉normal字段。不会自动由matched_normal切换flat。不得用种子BED冒充正常背景，flat结果仍须校准，不能宣称复现了原正常参考。
+新版模板默认全局筛种。使用下方相同的环境配置命令与 check/run 入口，详见[全局配置与复用](global_cnv.md)。
+
+### 历史局部配置
+
+显式设置 `cnv_scope="local"`。每例提供已有种子BED、原AA/AC目录、来源Suite版本、BAM和现有索引。上游需明确背景BED。默认matched_normal参考模式还需配对正常BAM；只有肿瘤BAM时可明确设 `local_cnv.reference_mode: "flat"` 并去掉normal字段。不会自动由matched_normal切换flat。不得用种子BED冒充正常背景，flat结果仍须校准，不能宣称复现了原正常参考。
 
 内置版本不包含二进制环境。可用锁定源准备结果与运行模板生成多版本配置：
 

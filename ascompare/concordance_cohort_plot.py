@@ -11,11 +11,13 @@ import math
 from collections import defaultdict
 from pathlib import Path
 
+from .concordance_global_report import GLOBAL_METRIC, GLOBAL_SCOPE
 from .reporting import write_tsv
 from .statistics import AGREEMENT_METRICS
 
 
 METRIC_LABELS = {
+    GLOBAL_METRIC: "Worst-direction native seed loss",
     "detection_discordance": "Detection discordance",
     "label_discordance": "Class-set discordance",
     "interval_distance": "Interval distance (1 - Jaccard)",
@@ -84,7 +86,7 @@ def _metric_row(down, stat, metric, final, stage):
         reference_version=down["reference_version"], source_version=down["source_version"],
         target_version=down["target_version"], analysis_kind=down["analysis_kind"],
         comparison_scope=final.get("comparison_scope", down.get("comparison_scope", "")),
-        stage=stage, metric=metric, subset="signal_positive" if stage == "downstream" else "known_candidates",
+        stage=stage, metric=metric, subset="signal_positive" if stage == "downstream" else ("global_native_seed_sets" if metric == GLOBAL_METRIC else "known_candidates"),
         estimate=estimate, interval_low=low, interval_high=high, interval_kind=interval_kind,
         displayed_confidence_level=confidence, agreement_lower=lower, agreement_upper=upper,
         agreement_alpha=alpha, margin=margin,
@@ -94,8 +96,10 @@ def _metric_row(down, stat, metric, final, stage):
         n_samples=stat.get("n_samples", 0), n_independent_units=n,
         independence_unit=stat.get("independence_unit", down.get("independence_unit", "sample")),
         n_selected_samples=down.get("n_selected_samples", 0),
-        n_evaluable_units=stat.get("n_regions", stat.get("evaluable_seeds", 0)),
-        n_expected_units=stat.get("total_regions", stat.get("expected_seeds", 0)),
+        n_evaluable_units=(stat.get("n_samples", 0) if metric == GLOBAL_METRIC
+                           else stat.get("n_regions", stat.get("evaluable_seeds", 0))),
+        n_expected_units=(stat.get("selected_samples", 0) if metric == GLOBAL_METRIC
+                          else stat.get("total_regions", stat.get("expected_seeds", 0))),
         n_excluded_units=stat.get("excluded_regions", down.get("excluded_units", 0)),
         min_independent_units=stat.get("min_samples"), primary_pair=primary,
         identity_anchor=identity, metric_decision=metric_decision, final_decision=final_decision,
@@ -129,7 +133,9 @@ def cohort_metric_rows(downstream, combined, upstream=None):
         stats = {r["metric"]: r for r in down.get("decision_metrics", []) if r is not None}
         for metric in AGREEMENT_METRICS:
             rows.append(_metric_row(down, stats.get(metric), metric, final, "downstream"))
-        if final.get("comparison_scope") == "conditional_local_upstream_and_fixed_seed_aa_ac":
+        if final.get("comparison_scope") == GLOBAL_SCOPE:
+            rows.append(_metric_row(down, up_index.get(key[1:]), GLOBAL_METRIC, final, "upstream"))
+        elif final.get("comparison_scope") == "conditional_local_upstream_and_fixed_seed_aa_ac":
             rows.append(_metric_row(down, up_index.get(key[1:]), UPSTREAM_METRIC, final, "upstream"))
     return rows
 
@@ -165,8 +171,7 @@ def plot_cohort_compatibility(out, rows, ref, mode, synthetic):
     groups = defaultdict(list)
     for row in rows:
         groups[row["analysis_kind"], row["source_version"]].append(row)
-    has_upstream = any(r["stage"] == "upstream" for r in rows)
-    metrics = list(AGREEMENT_METRICS) + ([UPSTREAM_METRIC] if has_upstream else [])
+    metrics = list(AGREEMENT_METRICS) + list(dict.fromkeys(r["metric"] for r in rows if r["stage"] == "upstream"))
     targets = {key: list(dict.fromkeys(r["target_version"] for r in local)) for key, local in groups.items()}
     heights = [max(2.4, .39 * len(targets[key]) + .9) for key in groups]
     with plt.rc_context({"font.size": 8, "axes.spines.top": False, "axes.spines.right": False,

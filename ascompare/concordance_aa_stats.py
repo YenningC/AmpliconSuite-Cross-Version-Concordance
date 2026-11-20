@@ -35,6 +35,23 @@ def validated_values(path, bam):
 
 def seed_stage_measurement(attempt, rows, sample, runtime, verified, config):
     """Consume only the just-completed upstream call, never search earlier attempts."""
+    if not verified.get('ready') or verified.get('aa', {}).get('version') not in LEGACY_AA:
+        return None
+    if not rows or any(r.get('status') not in ('retained', 'not_retained')
+                       or r.get('sample_id') != sample['sample_id'] or r.get('version') != runtime['id']
+                       for r in rows):
+        return None
+    expected = {seed['seed_id'] for seed in sample['seeds']}
+    if len(rows) != len(expected) or {r.get('seed_id') for r in rows} != expected:
+        return None
+    provenance = attempt / 'upstream_provenance.json'
+    if any(r.get('provenance') != str(provenance) for r in rows):
+        return dict(mode='native_measurement', reason='upstream records reference a different producer')
+    return native_seed_measurement(attempt, sample, runtime, verified, config)
+
+
+def native_seed_measurement(attempt, sample, runtime, verified, config):
+    """Validate a paired native helper's actual command and raw measurement."""
     aa = verified.get('aa', {})
     if aa.get('version') not in LEGACY_AA or not verified.get('ready'):
         return None
@@ -43,13 +60,6 @@ def seed_stage_measurement(attempt, rows, sample, runtime, verified, config):
             or aa.get('version') != builtin.get('version')
             or not aa.get('source_root') or Path(aa['source_root'])/builtin['entrypoint'] != Path(runtime['aa_script']).resolve()
             or aa.get('python') != str(Path(runtime['aa_python']).absolute())):
-        return None
-    if not rows or any(r.get('status') not in ('retained', 'not_retained')
-                       or r.get('sample_id') != sample['sample_id'] or r.get('version') != runtime['id']
-                       for r in rows):
-        return None
-    expected = {seed['seed_id'] for seed in sample['seeds']}
-    if len(rows) != len(expected) or {r.get('seed_id') for r in rows} != expected:
         return None
     private_ref = attempt / 'private_AA_DATA_REPO'
     stats = private_ref / 'coverage.stats'
@@ -62,8 +72,6 @@ def seed_stage_measurement(attempt, rows, sample, runtime, verified, config):
         if stat.st_size != identity.get('bytes') or stat.st_mtime_ns != identity.get('mtime_ns'):
             raise ValueError('BAM metadata changed since bounded input validation')
         provenance = attempt / 'upstream_provenance.json'
-        if any(r.get('provenance') != str(provenance) for r in rows):
-            raise ValueError('upstream records reference a different producer')
         recorded = json.loads(provenance.read_text())
         args = recorded['amplified_intervals']['args']
         expected_no_cstats = config.get('parameter_policy') != 'suite_defaults'

@@ -4,17 +4,23 @@
 
 [中文说明](README.zh-CN.md) · [Examples](examples) · [Environment setup](docs/environment_setup.md) · [Statistical methods](docs/statistical_methods.md) · [Changelog](#changelog)
 
-AmpliconSuite Cross-Version Concordance is an independent, local research tool. It compares existing AmpliconSuite outputs, orchestrates selected-seed AA/AC runs, and evaluates whether known candidate seeds remain selected after local CNVkit reassessment. It produces per-sample similarity ladders, paired difference tables and compatibility reports.
+AmpliconSuite Cross-Version Concordance is an independent, local research tool. It compares existing AmpliconSuite outputs, orchestrates selected-seed AA/AC runs, and compares native seed discovery from whole-genome CNVkit. It produces per-sample similarity ladders, paired difference tables and compatibility reports.
 
-**Version:** 0.4.4.dev2 · **Fixed reference:** Suite **1.6.2**, AA **1.6.r2**, AC **2.0.1**. The reference is frozen; installing a newer upstream release does not change it. This project is not an official AmpliconSuite component.
+**Version:** 0.5.0.dev0 · **Fixed reference:** Suite **1.6.2**, AA **1.6.r2**, AC **2.0.1**. The reference is frozen; installing a newer upstream release does not change it. This project is not an official AmpliconSuite component.
 
 > Similarity describes observed software outputs. It is not a probability of biological truth or proof that complete workflows are interchangeable. Compatibility remains **insufficient evidence** when margins are unspecified or evidence is inadequate.
+
+## Global CNVkit discovery with BAM
+
+New manifests use `"cnv_scope": "global"`. Each Suite obtains its recipe's whole-genome CNVkit segments, applies its own seed filters and runs AA/AC on its native seeds at the sampled loci. Matching whole-genome measurements are reused across Suite versions. Completed discovery can find seeds even when the original seed BED was empty. Manifests that explicitly configured legacy local windows keep that scope.
+
+[Global execution, reuse and reporting](docs/global_cnv.md) · [Manifest example](examples/concordance.with_bam.json)
 
 ## Official Suite defaults for selected regions
 
 New manifests use `"parameter_policy": "suite_defaults"` at the top level. AA runs in FULL/EXPLORE with the Suite default 10× target depth. The official version's licensing check selects the AA solver. Concordance leaves the inherited Python hash environment in place. AC uses its native classification thresholds. Native seed-filter defaults are gain 4.5 and minimum size 50,000 bp. Concordance checks optional coverage statistics against the locked AA reader before staging them. If AA recomputes coverage, valid graph and cycle outputs can still proceed to AC. The cache decision and observed outcome are saved in `aa_background.json`.
 
-The selected input regions, bounded local CNVkit design and 100 Mb access cap define the study scope. Genome-wide discovery and full-BAM QC are outside that scope. Remove any `aa_parameters` and `ac_parameters` overrides, and runtime solver or hash-seed overrides, when enabling this policy. Use a fresh output directory.
+In the legacy local workflow the selected input regions, bounded local CNVkit design and 100 Mb access cap define the study scope. Genome-wide discovery and full-BAM QC are outside that scope. Remove any `aa_parameters` and `ac_parameters` overrides, and runtime solver or hash-seed overrides, when enabling this policy. Use a fresh output directory.
 
 ## Faster fixed-seed reconstruction (0.4.3)
 
@@ -28,7 +34,7 @@ Start in a fresh output directory when upgrading. The first run measures cold pe
 
 ## Sample results and source-matched CNVkit controls (0.4.2)
 
-In `with_bam` mode each sample has its own local CNVkit standard: the version used to generate its input. For example, a sample originally processed with CNVkit 0.9.14 uses a local 0.9.14 run as its standard. Each target CNVkit uses the same tumor, normal-reference strategy, candidate windows, background, binning, segmentation settings and **source Suite AA seed filter**. Each distinct CNVkit version is evaluated once per sample in this comparison.
+In legacy local mode each sample has its own local CNVkit standard: the version used to generate its input. For example, a sample originally processed with CNVkit 0.9.14 uses a local 0.9.14 run as its standard. Each target CNVkit uses the same tumor, normal-reference strategy, candidate windows, background, binning, segmentation settings and **source Suite AA seed filter**. Each distinct CNVkit version is evaluated once per sample in this comparison.
 
 The original Suite result directory can supply the version via a single `*_run_metadata.json` recording the CNVkit command and version. Alternatively, declare the exact `source_cnvkit_version` in the sample manifest or TSV. Conflicting evidence yields an unavailable standard. Configure its exact executable in the shared `cnvkit_runtimes` registry if it is absent from the configured Suite runtimes. Optional `local_cnv.comparison_versions` adds standalone CNVkit targets. [Configuration and controls](docs/local_cnv_calibration.md)
 
@@ -45,7 +51,7 @@ asconcordance report --from-run runs/comparison --out reports/comparison-0.4.3
 ## What it does
 
 - Checks input files, coordinates, declared versions, reference compatibility and runtime identity.
-- Runs pinned components with the same selected seeds, records failures and resumes verified cached work.
+- Runs pinned components on paired loci with version-specific native seeds, records failures and resumes verified cached work.
 - Preserves multiple amplification classes and distinguishes negative, failed, missing and unsupported results.
 - Reports detection, additional/missed calls, class changes, interval overlap and class-specific interval overlap.
 - Compares paired samples, accounts for multiple seeds within a sample, and reports effects, confidence bounds and applicable tests.
@@ -55,7 +61,7 @@ asconcordance report --from-run runs/comparison --out reports/comparison-0.4.3
 
 | Mode | Required input | Supported analysis |
 |---|---|---|
-| `with_bam` | Existing AA/AC outputs, source Suite version, existing final seed BED, sorted BAM and existing index, matching reference resources | Local upstream candidate retention plus AA/AC reruns on a fixed subset of seeds; separate and conditional combined reports |
+| `with_bam` | Existing Suite results, source version, indexed BAM and reference resources | Global CNVkit, native Suite seeds and paired AA/AC reconstruction |
 | `results_only` | Existing AA/AC outputs, source Suite version and reference-build declaration | Compare supplied multi-version results; optionally rerun different AC versions on the same source AA reconstruction |
 
 **Without BAM, a single AA result cannot be used to rerun other AA versions.** AC-only comparisons require the same source AA version and graph identity and are reported separately from AA+AC comparisons. Missing versions remain unverified. Imported version declarations are checked against the lock; they are not proof of the historical execution environment.
@@ -117,9 +123,9 @@ Templates: [with BAM sample table](examples/samples.with_bam.tsv) + [config](exa
 
 Open `sample_reports.md` for all sample plots and `report.md` for the cohort. The new `cohort_compatibility.*` figure shows the actual statistical decision endpoints, bounds, prespecified margins, independent-unit counts and conditional final decisions. `cohort_compatibility_metrics.tsv` preserves its exact data. Patient IDs group linked samples; source versions and AC-only analyses stay separate. Per-sample plots show observed differences, not formal single-sample compatibility. `sample_progress.tsv` tracks serial processing and retains failed samples.
 
-## Bounded computation
+## Legacy local computation
 
-**This workflow never starts genome-wide BAM processing.** It does not run CNVkit `batch`/`autobin`, discover seeds genome-wide, sort or index BAM, convert CRAM, run full-file BAM statistics, or read an entire BAM to calculate its hash. Supply a sorted BAM and index prepared outside this program.
+This section describes explicit local-window manifests. It does not run CNVkit `batch`/`autobin`, discover seeds genome-wide, sort or index BAM, convert CRAM, run full-file BAM statistics, or read an entire BAM to calculate its hash. Supply a sorted BAM and index prepared outside this program.
 
 Upstream analysis measures all supplied candidate regions plus finite flanks and explicit background windows, then runs the corresponding AA seed filter. Downstream analysis uses the same frozen random subset across versions. Seeds are candidates, not confirmed amplifications.
 
@@ -206,6 +212,7 @@ Repeat the same `run` command to resume. Successful caches are checked against r
 
 | Version | Main changes |
 |---|---|
+| 0.5.0.dev0 | Discover seeds with global CNVkit, reuse verified stages, pair loci and reconstruct each Suite’s own native seeds. |
 | 0.4.4 (development) | Add an official Suite parameter policy for selected-region reconstruction and classification. |
 | 0.4.3 | Time bounded stages, use CYCLES for reconstruction, cache AA and AC separately and share verified identical AA jobs across Suite recipes. |
 | 0.4.2 | Use the sample’s original CNVkit version as the local baseline. Report seed retention, gains, losses and interval overlap. Bundle CNVkit 0.9.14 in the Linux image. |

@@ -277,7 +277,7 @@ pathlib.Path(str(prefix)+'_summary.txt').write_text('#Amplicons = 0\\n')
         sample={k:v for k,v in self.sample.items() if not k.startswith('_') and k!='seeds'}
         sample.update(seeds_bed=str(self.seedfile),source_result={'run_dir':str(self.source),
             'component_versions':{k:self.entry[k]['version'] for k in ('aa','ac')}})
-        config=dict(mode='with_bam',synthetic=True,reference_version='suite-1.6.2',target_versions=['suite-1.6.2','suite-1.6.0'],
+        config=dict(mode='with_bam',cnv_scope='local',synthetic=True,reference_version='suite-1.6.2',target_versions=['suite-1.6.2','suite-1.6.0'],
             samples=[sample],runtimes=[self.make_runtime('suite-1.6.0'),self.make_runtime('suite-1.6.2')],
             reference=self.config['reference'],io_policy=self.budgets,ac_parameters={'min_size':1,'min_flow':1},
             sampling={'max_seeds':2,'random_seed':42},statistics={'min_samples':20},threads=1)

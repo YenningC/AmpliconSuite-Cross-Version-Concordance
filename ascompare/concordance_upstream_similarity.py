@@ -2,6 +2,7 @@
 
 from collections import Counter, defaultdict
 
+from .concordance_global_report import GLOBAL_METRIC
 from .statistics import merge_intervals
 
 
@@ -47,7 +48,8 @@ def _count_fields(sample, records):
     if not sample['candidate_universe_declared']:
         status = 'candidate_universe_undeclared'
     elif not expected:
-        status = 'no_candidates'
+        status = ('unavailable' if sample.get('global_scope') and sample.get('native_seed_count') is None
+                  else 'no_candidates')
     elif not n:
         status = 'unavailable'
     elif n < expected:
@@ -88,7 +90,11 @@ def _pair_footprints(target, comparator, target_evidence, comparator_evidence):
     if not target['candidate_universe_declared']:
         status = 'candidate_universe_undeclared'
     elif not expected:
-        status = 'no_candidates'
+        if target.get('global_scope'):
+            status = ('both_empty' if comparator and target.get('native_seed_count') == 0
+                      and comparator.get('native_seed_count') == 0 else 'unavailable')
+        else:
+            status = 'no_candidates'
     elif not comparator:
         status = 'comparator_unavailable'
     elif not paired:
@@ -109,7 +115,36 @@ def _pair_footprints(target, comparator, target_evidence, comparator_evidence):
                 upstream_intersection_bp=intersection_bp if paired else None)
 
 
-def upstream_similarity_rows(seed_rows, sample_rows, reference_version):
+def _native_retention(source_rows, target_rows, threshold):
+    from .concordance_cnv import retention_fraction
+    retained = total = 0
+    for key, row in source_rows.items():
+        seeds = row.get('native_seeds')
+        footprint = target_rows[key]['retained_intervals']
+        if not isinstance(seeds, list) or not isinstance(footprint, list):
+            raise ValueError('A completed global seed comparison requires both native seed lists')
+        for seed in seeds:
+            total += 1
+            retained += retention_fraction(seed, footprint) >= threshold
+    return retained, retained / total if total else None
+
+
+def native_seed_comparison(target, comparator, threshold, comparable):
+    fields = {'seed_match_fraction': threshold}
+    losses = []
+    for label, native, other in (('comparator', comparator, target), ('target', target, comparator)):
+        count, fraction = _native_retention(native, other, threshold) if comparable else (None, None)
+        fields[f'{label}_native_seeds_retained_count'] = count
+        fields[f'{label}_native_seeds_retained_ratio'] = fraction
+        if fraction is not None:
+            losses.append(1 - fraction)
+    # If precisely one set is empty its opposite direction loses all native
+    # seeds. Two empty sets, or missing inputs, carry no positive evidence.
+    fields[GLOBAL_METRIC] = max(losses, default=None)
+    return fields
+
+
+def upstream_similarity_rows(seed_rows, sample_rows, reference_version, seed_match_fraction=1.0):
     """Decorate upstream sample counts and return per-sample directed version pairs.
 
     Input is normalized by concordance_report._upstream. Compare the union of
@@ -150,6 +185,21 @@ def upstream_similarity_rows(seed_rows, sample_rows, reference_version):
                             upstream_panel_retained_ratio=target['upstream_panel_retained_ratio'],
                             upstream_unevaluable_count=target['upstream_unevaluable_count'],
                             upstream_count_status=target['upstream_count_status'])
+                if target.get('global_scope'):
+                    pair.update(upstream_similarity_scope='whole_genome_native_final_seed_footprints',
+                                target_native_seed_count=target['native_seed_count'],
+                                comparator_native_seed_count=comparator['native_seed_count'] if comparator else None)
+                    comparable = pair['upstream_similarity_status'] in {'ok', 'both_empty'}
+                    a = by_version[sid, version]
+                    b = by_version[sid, comparator_version]
+                    pairs_present = [(r['status'] == 'retained', b[k]['status'] == 'retained')
+                                     for k, r in a.items() if k in b and r['evaluable'] and b[k]['evaluable']]
+                    pair.update(native_seed_comparison(a, b, seed_match_fraction, comparable))
+                    pair['upstream_pair_positive_loci'] = sum(x or y for x, y in pairs_present) if comparable else None
+                    pair['upstream_extra_loci'] = sum(x and not y for x, y in pairs_present) if comparable else None
+                    pair['upstream_missed_loci'] = sum(y and not x for x, y in pairs_present) if comparable else None
+                    n = pair['upstream_pair_positive_loci']
+                    pair['locus_discordance'] = (pair['upstream_extra_loci'] + pair['upstream_missed_loci']) / n if n else None
                 pairs.append(pair)
     return pairs
 
@@ -182,7 +232,7 @@ def upstream_similarity_cohort_rows(pairs, patient_ids, alpha=.05):
                        n_selected_samples=len(samples), n_selected_independent_units=len(ids),
                        independence_unit='sample' if patient_ids is None else 'patient',
                        interpretation='descriptive', interval_method='pointwise_two_sided_Hoeffding',
-                       confidence_level=1-alpha, upstream_similarity_scope=FOOTPRINT_SCOPE,
+                       confidence_level=1-alpha, upstream_similarity_scope=rows[0]['upstream_similarity_scope'],
                        upstream_similarity_status_counts=dict(Counter(row['upstream_similarity_status'] for row in rows)),
                        upstream_count_status_counts=dict(Counter(row['upstream_count_status'] for row in rows)))
         for key in ('upstream_target_cnvkit_versions', 'upstream_comparator_cnvkit_versions'):
@@ -190,9 +240,15 @@ def upstream_similarity_cohort_rows(pairs, patient_ids, alpha=.05):
         for key in ('upstream_expected_seeds', 'upstream_evaluable_count', 'upstream_retained_count',
                     'upstream_unevaluable_count', 'upstream_paired_seeds'):
             summary[key] = sum(row[key] for row in rows)
-        for metric, status_key, required in (
+        metrics = [
                 ('upstream_interval_jaccard', 'upstream_similarity_status', 'ok'),
-                ('upstream_retained_ratio', 'upstream_count_status', 'complete')):
+                ('upstream_retained_ratio', 'upstream_count_status', 'complete')]
+        if 'seed_match_fraction' in rows[0]:
+            summary['seed_match_fraction'] = rows[0]['seed_match_fraction']
+            metrics += [(GLOBAL_METRIC, 'upstream_similarity_status', 'ok'), ('locus_discordance', 'upstream_similarity_status', 'ok')]
+            metrics += [(f'{side}_native_seeds_retained_ratio', 'upstream_similarity_status', 'ok')
+                        for side in ('comparator', 'target')]
+        for metric, status_key, required in metrics:
             by_sample = {row['sample_id']: row[metric] for row in rows
                          if row[status_key] == required and row[metric] is not None}
             values = _independent_means(by_sample, patient_ids).tolist()

@@ -2,6 +2,8 @@
 
 版本 0.4.0 增加 `import-samples`，把一张本地 TSV 样本表与共享 JSON 配置合成一个清单。后续仍使用同一个 `check` / `run` 入口，按样本首次出现的顺序逐例分析，再汇总整组。样本编号、输出文件夹名由使用者指定，无需按固定格式重新命名样本。
 
+新版有 BAM 模板先做全局 CNVkit，再使用各版自己的种子。原种子文件可选。旧局部配置仍要求候选和背景。[全局流程及复用](global_cnv.md)
+
 ## 1. 准备样本表
 
 选择 `examples/samples.with_bam.tsv` 或 `examples/samples.results_only.tsv`，将人工占位路径替换为真实本地路径。文件是 UTF-8 的制表符分隔文本，支持表格软件导出的 UTF-8 BOM。示例中的 SYNTHETIC 路径不存在，不能直接执行科学分析。
@@ -14,14 +16,14 @@
 | `result_version` | 该行现有结果的版本；留空即 `source_version` |
 | `result_dir` / `run_dir` / `aa_dir` + `ac_dir` | 每行明确一份现有结果目录。Suite 顶层目录用 `result_dir`；含 `aa`、`ac` 子目录的规范目录用 `run_dir`；也可分别指定两个目录。存在歧义时报错 |
 | `patient_id` | 强烈建议填写。同一患者的多个样本使用相同 ID；使用时所有样本都必须有值 |
-| `alignment`, `index`, `seeds_bed` | `with_bam` 必需。排序 BAM、现成索引和源结果行的最终候选种子 BED |
+| `alignment`, `index`, `seeds_bed` | 提供排序 BAM 和索引。种子 BED 在全局发现中可选，在旧局部模式中必填 |
 | `normal_alignment`, `normal_index` | 成对填写。`matched_normal` 需要同一患者的正常对照 |
 | `aa_version`, `ac_version` | 该行结果原始组件版本声明；不会被当作历史环境已核验的证据 |
 | `source_cnvkit_version` | 原样本实际使用的精确 CNVkit 版本，如 `0.9.14`；用于该样本的局部标准。来源结果有单份记录 CNVkit 执行命令与版本的 `*_run_metadata.json` 时可留空；声明和原记录冲突时标为不可用 |
 | `baseline_cns`, `source_seed_bed`, `baseline_provenance` | 原候选再保留的历史校准证据；缺失时保留未核实状态，仍可描述已实测的局部版本差异 |
 | `stages_json` | 可选的规范化运行阶段证据文件 |
 
-每行是一份现有版本结果。`results_only` 中，同一个 `sample_id` 可以出现多行，分别填写不同 `result_version`，归并到该样本的 `comparison_results`。每例必须恰好有一行来源版本结果。没有 BAM 时不能生成未提供的 AA 重建。`with_bam` 通常每例一行来源结果，程序将对内置目标版本运行局部上下游流程。
+每行是一份现有版本结果。`results_only` 中，同一个 `sample_id` 可以出现多行，分别填写不同 `result_version`，归并到该样本的 `comparison_results`。每例必须恰好有一行来源版本结果。没有 BAM 时不能生成未提供的 AA 重建。`with_bam` 通常每例一行来源结果，程序按清单指定范围运行各个目标版本。
 
 同一样本各行的 `sample_id`、`source_version`、`reference_build` 每行重复填写，其他样本级字段可以只填一次；重复填写的非空值必须相同。重复版本、未知列、缺列、字段冲突会被拒绝。样本和患者编号使用字母、数字、下划线、短横线或点，避免空格及路径分隔符。
 
@@ -29,7 +31,7 @@
 
 选择 `examples/batch.with_bam.json` 或 `examples/batch.results_only.json`。配置不带 `samples`，或设置为空列表；样本全部来自 TSV。参考、内置目标版本、实际运行环境、计算预算和统计参数沿用单样本 JSON 配置。
 
-`with_bam` 示例的 `runtimes` 为空，使用前须配置实际精确版本环境。参考与正常参考策略必须适合整个批次。共享 `background_bed` 应事先验证适合这些样本及测序条件；程序逐例去掉与候选及延伸窗口重叠的部分，因此每例实际有效背景可能不同。不适用同一背景或实验条件的样本应分批运行。来源版本不同的样本自动分层，不将跨来源结果混在一个统计结论内。
+`with_bam` 示例的 `runtimes` 为空，使用前须配置实际精确版本环境。参考与正常参考策略必须适合整个批次。旧局部模式的共享 `background_bed` 应事先验证适合这些样本及测序条件；程序逐例去掉与候选及延伸窗口重叠的部分，因此每例实际有效背景可能不同。不适用同一背景或实验条件的样本应分批运行。来源版本不同的样本自动分层，不将跨来源结果混在一个统计结论内。
 
 共享配置可加入顶层 `cnvkit_runtimes`，逐版填写 `version`、`python` 和 `script`。为整批所有样本实际使用的 CNVkit 准备精确环境。可用 `local_cnv.comparison_versions` 追加不在所选 Suite 配方中的目标。各例从自身来源 CNVkit 起步，并对所有目标固定该例来源 Suite 的 AA 筛种器。[完整示例](local_cnv_calibration.md)
 

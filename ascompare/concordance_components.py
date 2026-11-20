@@ -4,6 +4,7 @@ This never enables upstream AA's reuse_intermediate_files: no segment, edge or
 coverage estimate from one AA commit is substituted into another AA commit.
 """
 import copy
+import hashlib
 import json
 from pathlib import Path
 import re
@@ -21,6 +22,19 @@ def _files(attempt, component):
         names += ['aa_background.json', 'selected_seeds.bed', 'reference/coverage.stats']
         names += [p.name for p in attempt.glob('bam_access.*.json')]
     return rows + [n for n in names if (attempt / n).is_file() and not (attempt / n).is_symlink()]
+
+
+def _seed_bed_text(seeds):
+    """Keep native seed fields and row order for global discovery. Legacy inputs use IDs."""
+    rows = []
+    for seed in seeds:
+        values = [seed['chrom'], seed['start'], seed['end']]
+        if seed.get('native_suite_bed'):
+            values.extend(seed['source_fields'])
+        else:
+            values.append(seed['seed_id'])
+        rows.append('\t'.join(map(str, values)) + '\n')
+    return ''.join(rows)
 
 
 def _aa_input_files(attempt):
@@ -118,8 +132,9 @@ def run_component_downstream(sample, seeds, runtime, entry, verified, config, ou
         downsample = 10 if official else params.get('downsample', -1)
         if runmode not in {'CYCLES', 'FULL'}:
             raise ValueError('AA runmode must be CYCLES or FULL')
+        native_bed_text = _seed_bed_text(seeds)
         aa_identity = dict(component=component_identity('aa', runtime, entry, verified, aa_env),
-            seeds=[{k: s[k] for k in ('chrom', 'start', 'end', 'seed_id')} for s in seeds],
+            seed_bed_sha256=hashlib.sha256(native_bed_text.encode('utf-8')).hexdigest(),
             inputs=[current_bam, current_index], reference=config['reference'],
             reference_identity=[r for r in config.get('_reference_identity', [])
                                 if r.get('kind') != 'local_cnv_background_bed'],
@@ -184,7 +199,7 @@ def run_component_downstream(sample, seeds, runtime, entry, verified, config, ou
                 stages['aa'] = _staged(aa_cached, component_cache['aa'])
                 print('  verified exact-commit AA output reused', flush=True)
             else:
-                bed.write_text(''.join(f'{s["chrom"]}\t{s["start"]}\t{s["end"]}\t{s["seed_id"]}\n' for s in seeds))
+                bed.write_text(native_bed_text, encoding='utf-8')
                 env = dict(aa_env, AA_DATA_REPO=str(api.local_reference(
                     config['reference']['aa_data_repo'], attempt / 'reference')),
                     MPLCONFIGDIR=str(attempt / 'mplcache'))

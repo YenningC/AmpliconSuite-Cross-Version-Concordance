@@ -58,7 +58,7 @@ class ConcordanceBatchTests(unittest.TestCase):
         self.assertEqual(load_manifest(self.output)[0], result)
 
     def test_config_paths_and_tsv_paths_have_independent_bases_without_reading_bam(self):
-        self.base.update(mode='with_bam', reference=dict(build='hg19', fasta='reference/hg19.fa',
+        self.base.update(mode='with_bam', cnv_scope='local', reference=dict(build='hg19', fasta='reference/hg19.fa',
                          aa_data_repo='reference/AA_DATA_REPO'),
                          local_cnv=dict(reference_mode='flat', background_bed='background.bed'),
                          runtimes=[dict(id='suite-1.6.2', aa_python='env/bin/python',
@@ -142,7 +142,7 @@ class ConcordanceBatchTests(unittest.TestCase):
                 self.assertFalse(self.output.exists())
 
     def test_with_bam_requires_explicit_source_seed_and_complete_normal_pair(self):
-        self.base.update(mode='with_bam', reference=dict(build='hg19', fasta='ref.fa', aa_data_repo='resources'))
+        self.base.update(mode='with_bam', cnv_scope='local', reference=dict(build='hg19', fasta='ref.fa', aa_data_repo='resources'))
         self.config.write_text(json.dumps(self.base))
         self.write_rows([self.row()])
         with self.assertRaisesRegex(ValueError, 'alignment, index, seeds_bed'):

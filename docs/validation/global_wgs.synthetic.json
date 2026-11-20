@@ -1,0 +1,262 @@
+{
+  "synthetic": true,
+  "scope": "artificial matched WGS control, one selected global comparison locus",
+  "fixed_reference": "suite-1.6.2",
+  "workflow_version": "0.5.0.dev0",
+  "original_seed_bed_supplied": false,
+  "global_batch_jobs": 2,
+  "within_run_cns_cache_hits": 9,
+  "versions": [
+    {
+      "suite": "suite-1.2.2",
+      "cnvkit": "0.9.10",
+      "global_cnv": "native_global_batch",
+      "native_seeds": 1,
+      "native_intervals": [
+        [
+          "chr1",
+          5100000,
+          6500001
+        ]
+      ],
+      "aa_status": "complete",
+      "ac_status": "complete",
+      "result_status": [
+        "ok"
+      ]
+    },
+    {
+      "suite": "suite-1.3.3",
+      "cnvkit": "0.9.10",
+      "global_cnv": "same_recipe_cache",
+      "native_seeds": 1,
+      "native_intervals": [
+        [
+          "chr1",
+          5100000,
+          6500001
+        ]
+      ],
+      "aa_status": "complete",
+      "ac_status": "complete",
+      "result_status": [
+        "ok"
+      ]
+    },
+    {
+      "suite": "suite-1.3.4",
+      "cnvkit": "0.9.10",
+      "global_cnv": "same_recipe_cache",
+      "native_seeds": 1,
+      "native_intervals": [
+        [
+          "chr1",
+          5100000,
+          6500001
+        ]
+      ],
+      "aa_status": "complete",
+      "ac_status": "complete",
+      "result_status": [
+        "ok"
+      ]
+    },
+    {
+      "suite": "suite-1.3.7",
+      "cnvkit": "0.9.10",
+      "global_cnv": "same_recipe_cache",
+      "native_seeds": 1,
+      "native_intervals": [
+        [
+          "chr1",
+          5100000,
+          6500001
+        ]
+      ],
+      "aa_status": "complete",
+      "ac_status": "complete",
+      "result_status": [
+        "ok"
+      ]
+    },
+    {
+      "suite": "suite-1.4.0",
+      "cnvkit": "0.9.10",
+      "global_cnv": "same_recipe_cache",
+      "native_seeds": 1,
+      "native_intervals": [
+        [
+          "chr1",
+          5100000,
+          6500001
+        ]
+      ],
+      "aa_status": "complete",
+      "ac_status": "complete",
+      "result_status": [
+        "ok"
+      ]
+    },
+    {
+      "suite": "suite-1.5.0",
+      "cnvkit": "0.9.10",
+      "global_cnv": "same_recipe_cache",
+      "native_seeds": 1,
+      "native_intervals": [
+        [
+          "chr1",
+          5100000,
+          6500000
+        ]
+      ],
+      "aa_status": "complete",
+      "ac_status": "complete",
+      "result_status": [
+        "ok"
+      ]
+    },
+    {
+      "suite": "suite-1.5.2",
+      "cnvkit": "0.9.10",
+      "global_cnv": "same_recipe_cache",
+      "native_seeds": 1,
+      "native_intervals": [
+        [
+          "chr1",
+          5100000,
+          6500000
+        ]
+      ],
+      "aa_status": "complete",
+      "ac_status": "complete",
+      "result_status": [
+        "ok"
+      ]
+    },
+    {
+      "suite": "suite-1.5.3",
+      "cnvkit": "0.9.13",
+      "global_cnv": "same_recipe_cache",
+      "native_seeds": 1,
+      "native_intervals": [
+        [
+          "chr1",
+          5100000,
+          6500000
+        ]
+      ],
+      "aa_status": "complete",
+      "ac_status": "complete",
+      "result_status": [
+        "ok"
+      ]
+    },
+    {
+      "suite": "suite-1.6.0",
+      "cnvkit": "0.9.13",
+      "global_cnv": "same_recipe_cache",
+      "native_seeds": 1,
+      "native_intervals": [
+        [
+          "chr1",
+          5100000,
+          6500000
+        ]
+      ],
+      "aa_status": "complete",
+      "ac_status": "complete",
+      "result_status": [
+        "ok"
+      ]
+    },
+    {
+      "suite": "suite-1.6.1",
+      "cnvkit": "0.9.13",
+      "global_cnv": "native_global_batch",
+      "native_seeds": 1,
+      "native_intervals": [
+        [
+          "chr1",
+          5100000,
+          6500000
+        ]
+      ],
+      "aa_status": "complete",
+      "ac_status": "complete",
+      "result_status": [
+        "ok"
+      ]
+    },
+    {
+      "suite": "suite-1.6.2",
+      "cnvkit": "0.9.13",
+      "global_cnv": "same_recipe_cache",
+      "native_seeds": 1,
+      "native_intervals": [
+        [
+          "chr1",
+          5100000,
+          6500000
+        ]
+      ],
+      "aa_status": "complete",
+      "ac_status": "complete",
+      "result_status": [
+        "ok"
+      ]
+    }
+  ],
+  "raw_count_queries": {
+    "0.9.13": {
+      "normal": {
+        "hits": 0,
+        "misses": 1
+      },
+      "tumor": {
+        "hits": 0,
+        "misses": 1
+      }
+    },
+    "0.9.10": {
+      "normal": {
+        "hits": 1,
+        "misses": 0
+      },
+      "tumor": {
+        "hits": 1,
+        "misses": 0
+      }
+    }
+  },
+  "plain_cnvkit_controls": {
+    "versions": [
+      "0.9.10",
+      "0.9.13"
+    ],
+    "files_compared_per_version": [
+      "normal.targetcoverage.cnn",
+      "tumor.targetcoverage.cnn",
+      "reference.cnn",
+      "tumor.cnr",
+      "tumor.cns"
+    ],
+    "byte_equal": true,
+    "reproducible_test": "tests/test_global_cnv_native.py"
+  },
+  "wrapper_seed_controls": [
+    {
+      "suite": "suite-1.2.2",
+      "native_cnv_calls_sha256": "97e4cfd8cb40abc5f09d9129b57f2a2994a17c925ad04e3118417466f2006a92",
+      "prefilter_sha256": "3ed307307c6007dbbc4ef07e7a42bf3662c99df0cec2b6e84690585cc76f7c31",
+      "native_and_adapter_first_fields_equal": true,
+      "number_of_path_only_differences": 1
+    },
+    {
+      "suite": "suite-1.6.2",
+      "native_cnv_calls_sha256": "97e4cfd8cb40abc5f09d9129b57f2a2994a17c925ad04e3118417466f2006a92",
+      "prefilter_sha256": "5ab54fc859a70b886a7e414130181857bea2f4cc3418bda60ae687c5c9567929",
+      "native_and_adapter_first_fields_equal": true,
+      "number_of_path_only_differences": 1
+    }
+  ]
+}

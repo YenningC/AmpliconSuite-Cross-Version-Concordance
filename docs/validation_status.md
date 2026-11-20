@@ -1,5 +1,10 @@
 # Validation status
 
+## 0.5.0.dev0 全局发现
+
+人工肿瘤与正常 BAM 未提供原种子 BED。11 套锁定 Suite 全部完成全局筛种、原生 AA 和 AC。两个不同的 CNVkit 配方各运行一次，其余九套使用校验通过的 CNS。第二版的肿瘤及正常原始覆盖度查询均命中第一版的计数。在独立人工对照上，每一版的肿瘤覆盖度、正常覆盖度、参考、CNR 及 CNS 都与同版本直接执行的原生 batch 和 CBS 逐字节相同。另用旧、新两版完整官方 Suite 入口复核筛种，最终坐标、顺序和 CN 一致，BED 的来源路径随运行目录变化。单个合成样本的兼容结论为证据不足。[逐版验证结果](validation/global_wgs.synthetic.json)
+
+
 ## 0.4.4.dev2 empty candidate controls
 
 A valid empty BED produces no-seed records for native Suite comparisons, fixed-source CNVkit comparisons and AA/AC comparisons, even when the component runtime is unavailable. The installed CLI produced a complete report for an explicitly artificial empty BED with unavailable AA. No runtime probes or scientific subprocesses ran. Descriptive expected and evaluable seed counts were both zero, and the compatibility table reported insufficient evidence. A separate regression kept a missing BED file as an input error.
