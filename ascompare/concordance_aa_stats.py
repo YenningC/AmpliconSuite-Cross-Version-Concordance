@@ -7,9 +7,10 @@ from .common import digest
 from .versions import load_lock
 
 
-# These locked releases use the same native 15-field coverage.stats reader in
-# AA and writer in amplified_intervals.py. Newer helpers need no such handoff.
-LEGACY_AA = {'1.3.r8', '1.4.r2', '1.5.r2', '1.5.r3', '1.5.r4', '1.5.r6'}
+# These locked releases share the same 15-field format. The 1.5 readers below
+# require the stored support to equal the AA option, whose native default is 2.
+EQUAL_PAIR_SUPPORT_AA = {'1.5.r2', '1.5.r3', '1.5.r4', '1.5.r6'}
+LEGACY_AA = {'1.3.r8', '1.4.r2'} | EQUAL_PAIR_SUPPORT_AA
 
 
 def validated_values(path, bam):
@@ -86,6 +87,40 @@ def seed_stage_measurement(attempt, rows, sample, runtime, verified, config):
                     reference_build=build)
     except (OSError, ValueError, KeyError, IndexError, TypeError) as exc:
         return dict(mode='native_measurement', reason=str(exc))
+
+
+def plan_background_measurement(measurement, aa_version, bam, job, *, allow_alias):
+    """Decide whether to stage a verified candidate for the locked AA reader."""
+    if not measurement:
+        return dict(mode='native_measurement', reason='No eligible same-version seed-stage measurement')
+    if measurement['mode'] != 'same_version_seed_stage':
+        return measurement
+
+    pair_support = int(round(float(measurement['fields'][11])))
+    bam_has_whitespace = any(c.isspace() for c in str(Path(bam).resolve()))
+    if aa_version in EQUAL_PAIR_SUPPORT_AA and pair_support != 2:
+        reason = f'AA {aa_version} requires cached pair support to equal pair_support_min=2; measured {pair_support}'
+    elif bam_has_whitespace and not allow_alias:
+        reason = 'Native AA cannot match whitespace in the original BAM path in coverage.stats'
+    elif bam_has_whitespace and any(c.isspace() for c in str(Path(job).absolute())):
+        reason = 'BAM and working paths both contain whitespace; native AA cannot match a private cache alias'
+    else:
+        return measurement
+    candidate = {k: measurement[k] for k in ('path', 'sha256', 'producer') if k in measurement}
+    return dict(mode='native_measurement', reason=reason,
+                rejected_candidate=dict(candidate, pair_support=pair_support))
+
+
+def native_background_recomputed(stdout, native_log):
+    marker = 'cstats not found, generating coverage statistics'
+    if marker in stdout:
+        return True
+    # Native AA writes this at DEBUG level, which stdout may exclude.
+    try:
+        with native_log.open(errors='replace') as log:
+            return any(marker in line for line in log)
+    except OSError:
+        return False
 
 
 def stage_measurement(measurement, attempt, bam, *, allow_alias=True):

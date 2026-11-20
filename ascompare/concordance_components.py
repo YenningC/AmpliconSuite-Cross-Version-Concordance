@@ -63,6 +63,7 @@ def _new_attempt(api, out):
 
 def run_component_downstream(sample, seeds, runtime, entry, verified, config, out, measurement=None):
     from . import concordance as api
+    from .concordance_aa_stats import native_background_recomputed, plan_background_measurement, validated_values
     from .parsing import parse_run, aa_amplicon_count
     from .concordance_timing import measure
     from .versions import _check_source
@@ -79,13 +80,6 @@ def run_component_downstream(sample, seeds, runtime, entry, verified, config, ou
     aa_env = effective_environment('aa', runtime, config['reference'], pin_hash_seed=not official)
     ac_env = effective_environment('ac', runtime, config['reference'])
     hash_seed = aa_env.get('PYTHONHASHSEED')
-    background = measurement or dict(mode='native_measurement', reason='No eligible same-version seed-stage measurement')
-    if (not official and background['mode'] == 'same_version_seed_stage'
-            and any(c.isspace() for c in str(Path(sample['alignment']).resolve()))
-            and any(c.isspace() for c in str(out.absolute()))):
-        background = dict(mode='native_measurement',
-            reason='BAM and working paths both contain whitespace; native AA cannot match a private cache alias')
-    reuse_stats = background['mode'] == 'same_version_seed_stage'
     try:
         fixed_hash = bool(hash_seed and re.fullmatch(r'[0-9]{1,10}', hash_seed)
                           and int(hash_seed) <= 4294967295)
@@ -112,11 +106,13 @@ def run_component_downstream(sample, seeds, runtime, entry, verified, config, ou
             if previous and any(previous.get(k) != observed.get(k) for k in
                                 ('bytes', 'mtime_ns', 'sampled_sha256', 'sha256') if k in previous):
                 raise ValueError('BAM/index identity changed since bounded input validation')
-        if reuse_stats:
-            from .concordance_aa_stats import validated_values
-            if (digest(background['path']) != background.get('sha256') or
-                    validated_values(Path(background['path']), Path(sample['alignment']).resolve()) != background.get('fields')):
+        if measurement and measurement['mode'] == 'same_version_seed_stage':
+            if (digest(measurement['path']) != measurement.get('sha256') or
+                    validated_values(Path(measurement['path']), Path(sample['alignment']).resolve()) != measurement.get('fields')):
                 raise ValueError('Native AA measurement changed after the seed stage')
+        background = plan_background_measurement(
+            measurement, entry['aa']['version'], sample['alignment'], out, allow_alias=not official)
+        reuse_stats = background['mode'] == 'same_version_seed_stage'
         params = config.get('aa_parameters', {})
         runmode = 'FULL' if official else params.get('runmode', 'CYCLES')
         downsample = 10 if official else params.get('downsample', -1)
@@ -227,20 +223,28 @@ def run_component_downstream(sample, seeds, runtime, entry, verified, config, ou
                 stages['aa'].update(status='complete' if rc == 0 else 'failed', returncode=rc, ended=now())
                 atomic_json(attempt / 'stages.json', stages)
                 aa_log = (attempt / 'aa.log').read_text(errors='replace')
-                if reuse_stats:
-                    evidence['reuse_confirmed'] = ('Reusing cstats from ' + str(attempt / 'reference' / 'coverage.stats') in aa_log
-                        and digest(attempt / 'reference' / 'coverage.stats') == evidence['staged_sha256'])
-                    atomic_json(attempt / 'aa_background.json', evidence)
                 for audit in sorted(attempt.glob('bam_access.*.json')):
                     access = json.loads(audit.read_text())
                     if access.get('blocked'):
                         raise RuntimeError(access['blocked'][0] + '; see ' + audit.name)
                 if rc:
                     raise RuntimeError('Bounded AA failed; see aa.log')
-                if reuse_stats and not evidence['reuse_confirmed'] and not official:
-                    raise RuntimeError('Native AA did not confirm use of its staged coverage.stats')
                 if 'Traceback (most recent call last)' in aa_log:
                     raise RuntimeError('AA logged an exception despite exit zero')
+                outcome = 'native_measured'
+                if reuse_stats:
+                    staged = attempt / 'reference' / 'coverage.stats'
+                    if ('Reusing cstats from ' + str(staged) in aa_log and staged.is_file()
+                            and digest(staged) == evidence['staged_sha256']):
+                        evidence['reuse_confirmed'] = True
+                        outcome = 'reused'
+                    elif native_background_recomputed(aa_log, attempt / 'aa' / 'reconstruction.log'):
+                        outcome = 'native_recomputed'
+                    else:
+                        outcome = 'reuse_unverified'
+                evidence['outcome'] = outcome
+                atomic_json(attempt / 'aa_background.json', evidence)
+                stages['aa']['background_outcome'] = outcome
                 # Strict validation gates publication, while ordinary result
                 # parsing retains unaffected amplicons from a partial native run.
                 # A process exit of zero is not by itself a reusable AA success.

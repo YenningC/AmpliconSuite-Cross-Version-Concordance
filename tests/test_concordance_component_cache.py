@@ -33,13 +33,21 @@ class ComponentCacheIntegrationTests(unittest.TestCase):
     def tearDown(self):
         self.fixture.tearDown()
 
-    def run_job(self, version='suite-1.3.3', job=None, verified=None, runtime_updates=None):
+    def run_job(self, version='suite-1.3.3', job=None, verified=None, runtime_updates=None, measurement=None):
         runtime = self.fixture.make_runtime(version)
         runtime.update(runtime_updates or {})
         entry = self.fixture.entries[version]
         verification = verified or self.fixture.make_verified(runtime, entry)
         return run_bounded_downstream(self.fixture.sample, self.fixture.seeds,
-            runtime, entry, verification, self.config, self.root / (job or version))
+            runtime, entry, verification, self.config, self.root / (job or version), measurement)
+
+    def background_candidate(self, support):
+        bam = self.fixture.bam
+        stats = self.root / 'seed-stage.stats'
+        fields = ['20', '20', '3', '20', '20', '5', '150', '330', '25', '255', '405',
+                  str(support), '0.95', '3', str(bam.stat().st_size)]
+        stats.write_text('\t'.join([str(bam), *fields]) + '\n')
+        return dict(mode='same_version_seed_stage', path=str(stats), fields=fields, sha256=digest(stats))
 
     def assert_ok(self, record):
         self.assertEqual(record['status'], 'ok', record.get('reason'))
@@ -92,29 +100,50 @@ class ComponentCacheIntegrationTests(unittest.TestCase):
         self.assertNotEqual(first['component_cache']['aa']['key'], second['component_cache']['aa']['key'])
         self.assertEqual(first['run_dir'], resumed['run_dir'])
 
-    def test_suite_defaults_accept_native_background_recomputation(self):
+    def test_suite_defaults_skip_known_ineligible_cache_and_run_ac(self):
         self.config['parameter_policy'] = 'suite_defaults'
-        bam = self.fixture.bam
-        stats = self.root / 'seed-stage.stats'
+        self.config.pop('aa_parameters')
+        self.config.pop('ac_parameters')
         # The 11 in the native field is computed coverage support, not a
         # requested minimum to substitute in the AA command.
-        fields = ['20','20','3','20','20','5','150','330','25','255','405','11','0.95','3',str(bam.stat().st_size)]
-        stats.write_text('\t'.join([str(bam), *fields])+'\n')
+        candidate = self.background_candidate(11)
+        self.fixture.aa.write_text(self.fixture.aa.read_text() + """
+stats=pathlib.Path(os.environ['AA_DATA_REPO'])/'coverage.stats'
+assert not stats.exists()
+assert '--pair_support_min' not in a and '--no_cstats' not in a
+print('cstats not found, generating coverage statistics')
+""")
+        result = self.run_job('suite-1.3.7', measurement=candidate)
+        self.assert_ok(result)
+        attempt = Path(result['run_dir'])
+        evidence = json.loads((attempt/'aa_background.json').read_text())
+        self.assertEqual(evidence['mode'], 'native_measurement')
+        self.assertEqual(evidence['outcome'], 'native_measured')
+        self.assertFalse(evidence['reuse_confirmed'])
+        self.assertNotIn('staged_sha256', evidence)
+        self.assertEqual(evidence['rejected_candidate']['pair_support'], 11)
+        self.assertEqual(evidence['rejected_candidate']['sha256'], candidate['sha256'])
+        self.assertEqual(digest(Path(candidate['path'])), candidate['sha256'])
+        stages = json.loads((attempt/'stages.json').read_text())
+        self.assertEqual(stages['aa']['background_outcome'], 'native_measured')
+        self.assertEqual(stages['ac']['status'], 'complete')
+        self.assertEqual(self.fixture.trace(), ['AA', 'AC'])
+
+    def test_successful_native_fallback_after_staging_eligible_cache_runs_ac(self):
+        candidate = self.background_candidate(2)
         self.fixture.aa.write_text(self.fixture.aa.read_text() + """
 stats=pathlib.Path(os.environ['AA_DATA_REPO'])/'coverage.stats'
 with stats.open('a') as handle:
     handle.write(stats.read_text())
-print('cstats not found, generating coverage statistics')
+(prefix.parent/'reconstruction.log').write_text('cstats not found, generating coverage statistics')
 """)
-        runtime = self.fixture.make_runtime('suite-1.3.7')
-        entry = self.fixture.entries['suite-1.3.7']
-        verified = self.fixture.make_verified(runtime, entry)
-        measurement = dict(mode='same_version_seed_stage', path=str(stats), fields=fields, sha256=digest(stats))
-        result = run_bounded_downstream(self.fixture.sample, self.fixture.seeds, runtime, entry,
-                                        verified, self.config, self.root/'native', measurement)
+        result = self.run_job('suite-1.3.7', measurement=candidate)
         self.assert_ok(result)
-        record = json.loads((Path(result['run_dir'])/'aa_background.json').read_text())
-        self.assertFalse(record['reuse_confirmed'])
+        evidence = json.loads((Path(result['run_dir'])/'aa_background.json').read_text())
+        self.assertEqual(evidence['mode'], 'same_version_seed_stage')
+        self.assertEqual(evidence['outcome'], 'native_recomputed')
+        self.assertFalse(evidence['reuse_confirmed'])
+        self.assertEqual(digest(Path(candidate['path'])), candidate['sha256'])
         self.assertEqual(self.fixture.trace(), ['AA', 'AC'])
 
     def test_ac_parameter_change_reuses_aa_and_reexecutes_ac(self):

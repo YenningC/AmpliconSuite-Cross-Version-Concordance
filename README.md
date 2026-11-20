@@ -6,13 +6,13 @@
 
 AmpliconSuite Cross-Version Concordance is an independent, local research tool. It compares existing AmpliconSuite outputs, orchestrates selected-seed AA/AC runs, and evaluates whether known candidate seeds remain selected after local CNVkit reassessment. It produces per-sample similarity ladders, paired difference tables and compatibility reports.
 
-**Version:** 0.4.4.dev0 · **Fixed reference:** Suite **1.6.2**, AA **1.6.r2**, AC **2.0.1**. The reference is frozen; installing a newer upstream release does not change it. This project is not an official AmpliconSuite component.
+**Version:** 0.4.4.dev1 · **Fixed reference:** Suite **1.6.2**, AA **1.6.r2**, AC **2.0.1**. The reference is frozen; installing a newer upstream release does not change it. This project is not an official AmpliconSuite component.
 
 > Similarity describes observed software outputs. It is not a probability of biological truth or proof that complete workflows are interchangeable. Compatibility remains **insufficient evidence** when margins are unspecified or evidence is inadequate.
 
 ## Official Suite defaults for selected regions
 
-New manifests use `"parameter_policy": "suite_defaults"` at the top level. AA runs in FULL/EXPLORE with the Suite default 10× target depth. The official version's licensing check selects the AA solver. Concordance leaves the inherited Python hash environment in place. AC uses its native classification thresholds. Native seed-filter defaults are gain 4.5 and minimum size 50,000 bp. Successful AA reconstruction can proceed to AC when AA recomputes coverage statistics.
+New manifests use `"parameter_policy": "suite_defaults"` at the top level. AA runs in FULL/EXPLORE with the Suite default 10× target depth. The official version's licensing check selects the AA solver. Concordance leaves the inherited Python hash environment in place. AC uses its native classification thresholds. Native seed-filter defaults are gain 4.5 and minimum size 50,000 bp. Concordance checks optional coverage statistics against the locked AA reader before staging them. If AA recomputes coverage, valid graph and cycle outputs can still proceed to AC. The cache decision and observed outcome are saved in `aa_background.json`.
 
 The selected input regions, bounded local CNVkit design and 100 Mb access cap define the study scope. Genome-wide discovery and full-BAM QC are outside that scope. Remove any `aa_parameters` and `ac_parameters` overrides, and runtime solver or hash-seed overrides, when enabling this policy. Use a fresh output directory.
 

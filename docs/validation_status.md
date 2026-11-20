@@ -1,5 +1,11 @@
 # Validation status
 
+## 0.4.4.dev1 coverage-statistics checks
+
+The wrapper checks whether the locked AA reader can accept a verified seed-stage measurement. The paired-read support stored by the upstream stage is preserved. When native AA recomputes coverage, audited and structurally valid reconstruction can proceed to AC. Lack of a reuse marker is recorded as an unverified reuse outcome.
+
+In an artificial BAM control, Suite 1.3.7, 1.4.0, 1.5.0 and 1.5.2 skipped staged measurements with an artificial stored support of 11, recomputed coverage, and finished native AA and AC within the access budget. Suite 1.3.3 reused a genuine compatible measurement from the artificial fixture and finished both stages. All five kept FULL/EXPLORE, 10× target depth and their native thresholds. The local suite passed 369 regressions with the optional native CNVkit case enabled. [Synthetic result](validation/aa_coverage_fallback.synthetic.json)
+
 ## 0.4.4 development Suite-default controls
 
 The `suite_defaults` policy was checked against all eleven locked Suite sources. It retains the default FULL/EXPLORE/10× invocation, uses the locked Suite's license check for recent solver selection and lets the native classifier supply its numerical defaults. It treats coverage-statistic recomputation as a normal native outcome when AA succeeds. A run with an inherited non-fixed Python hash seed does its own AA reconstruction per Suite, with resume restricted to the same job.

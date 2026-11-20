@@ -1,0 +1,92 @@
+[
+  {
+    "suite": "suite-1.3.7",
+    "synthetic_only": true,
+    "support_in_candidate": 11,
+    "background_mode": "native_measurement",
+    "background_outcome": "native_measured",
+    "aa": "complete",
+    "ac": "complete",
+    "fit": [
+      "Linear"
+    ],
+    "flags": {
+      "--runmode": "FULL",
+      "--extendmode": "EXPLORE",
+      "--downsample": "10"
+    },
+    "audit_blocked": false
+  },
+  {
+    "suite": "suite-1.4.0",
+    "synthetic_only": true,
+    "support_in_candidate": 11,
+    "background_mode": "native_measurement",
+    "background_outcome": "native_measured",
+    "aa": "complete",
+    "ac": "complete",
+    "fit": [
+      "Linear"
+    ],
+    "flags": {
+      "--runmode": "FULL",
+      "--extendmode": "EXPLORE",
+      "--downsample": "10"
+    },
+    "audit_blocked": false
+  },
+  {
+    "suite": "suite-1.5.0",
+    "synthetic_only": true,
+    "support_in_candidate": 11,
+    "background_mode": "native_measurement",
+    "background_outcome": "native_measured",
+    "aa": "complete",
+    "ac": "complete",
+    "fit": [
+      "Linear"
+    ],
+    "flags": {
+      "--runmode": "FULL",
+      "--extendmode": "EXPLORE",
+      "--downsample": "10"
+    },
+    "audit_blocked": false
+  },
+  {
+    "suite": "suite-1.5.2",
+    "synthetic_only": true,
+    "support_in_candidate": 11,
+    "background_mode": "native_measurement",
+    "background_outcome": "native_measured",
+    "aa": "complete",
+    "ac": "complete",
+    "fit": [
+      "Linear"
+    ],
+    "flags": {
+      "--runmode": "FULL",
+      "--extendmode": "EXPLORE",
+      "--downsample": "10"
+    },
+    "audit_blocked": false
+  },
+  {
+    "suite": "suite-1.3.3",
+    "synthetic_only": true,
+    "support_in_candidate": 2,
+    "background_mode": "same_version_seed_stage",
+    "background_outcome": "reused",
+    "aa": "complete",
+    "ac": "complete",
+    "fit": [
+      "Linear"
+    ],
+    "flags": {
+      "--runmode": "FULL",
+      "--extendmode": "EXPLORE",
+      "--downsample": "10"
+    },
+    "audit_blocked": false
+  }
+]

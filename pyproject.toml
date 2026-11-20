@@ -3,7 +3,7 @@ requires = ["setuptools>=77.0.3"]
 build-backend = "setuptools.build_meta"
 [project]
 name = "ampliconsuite-cross-version-concordance"
-version = "0.4.4.dev0"
+version = "0.4.4.dev1"
 description = "AmpliconSuite Cross-Version Concordance: assess version differences at selected regions"
 readme = "README.md"
 license = "MIT"

@@ -780,10 +780,11 @@ def main(argv=None):
             source = Path(args.from_run).resolve() if args.from_run else out
             original = json.loads((source / 'provenance.json').read_text())
             run_version = original.get('program_version')
-            if run_version not in {PROGRAM_VERSION, '0.4.3', '0.4.2', '0.4.1', '0.4.0', '0.3.0', '0.3.1', '0.3.2'}:
+            if run_version not in {PROGRAM_VERSION, '0.4.4.dev0', '0.4.3', '0.4.2', '0.4.1', '0.4.0',
+                                   '0.3.0', '0.3.1', '0.3.2'}:
                 raise ValueError('Use the original program version to redraw this report, or run the manifest into a new output directory')
             names = ('downstream_records.json', 'upstream_records.json', 'config.resolved.json')
-            if run_version in {PROGRAM_VERSION, '0.4.3', '0.4.2'}:
+            if run_version in {PROGRAM_VERSION, '0.4.4.dev0', '0.4.3', '0.4.2'}:
                 names += ('local_cnv_comparator_records.json',)
             expected = json.loads((source / 'report_inputs.sha256.json').read_text())
             if set(expected) != set(names):

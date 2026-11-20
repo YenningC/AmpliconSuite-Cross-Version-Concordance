@@ -4,7 +4,9 @@ import tempfile
 import unittest
 
 from ascompare.common import digest
-from ascompare.concordance_aa_stats import seed_stage_measurement, stage_measurement, validated_values
+from ascompare.concordance_aa_stats import (
+    plan_background_measurement, seed_stage_measurement, stage_measurement, validated_values,
+)
 from ascompare.versions import load_lock
 
 
@@ -96,3 +98,38 @@ class NativeHandoffTests(unittest.TestCase):
                 self.stats.write_text('\t'.join([str(self.bam), *values])+'\n')
                 with self.assertRaises(ValueError):
                     validated_values(self.stats,self.bam)
+
+    def test_locked_readers_apply_their_own_pair_support_rule(self):
+        bam = self.root/'synthetic.bam'
+        bam.write_bytes(self.bam.read_bytes())
+        job = self.root/'downstream'
+        for version in ('1.3.r8', '1.4.r2', '1.5.r2', '1.5.r3', '1.5.r4', '1.5.r6'):
+            for support in (2, 11):
+                with self.subTest(version=version, support=support):
+                    fields = self.fields.copy()
+                    fields[11] = str(support)
+                    stats = self.root/'candidate.stats'
+                    stats.write_text('\t'.join([str(bam), *fields])+'\n')
+                    candidate = dict(mode='same_version_seed_stage', path=str(stats),
+                                     fields=validated_values(stats, bam), sha256=digest(stats),
+                                     producer=str(self.prov))
+                    plan = plan_background_measurement(candidate, version, bam, job, allow_alias=False)
+                    if support == 2 or version in ('1.3.r8', '1.4.r2'):
+                        self.assertEqual(plan, candidate)
+                    else:
+                        self.assertEqual(plan['mode'], 'native_measurement')
+                        self.assertIn('pair_support_min=2', plan['reason'])
+                        self.assertEqual(plan['rejected_candidate'], dict(
+                            pair_support=11, path=str(stats), sha256=digest(stats),
+                            producer=str(self.prov)))
+                    self.assertEqual(candidate['fields'][11], str(support))
+
+    def test_official_plan_skips_whitespace_path_without_generating_an_alias(self):
+        candidate = self.measurement()
+        job = self.root/'downstream'
+        plan = plan_background_measurement(candidate, '1.4.r2', self.bam, job, allow_alias=False)
+        self.assertEqual(plan['mode'], 'native_measurement')
+        self.assertIn('whitespace', plan['reason'])
+        self.assertEqual(plan['rejected_candidate']['path'], str(self.stats))
+        self.assertEqual(plan_background_measurement(candidate, '1.4.r2', self.bam, job,
+                                                     allow_alias=True), candidate)

@@ -205,7 +205,10 @@ pathlib.Path(str(prefix)+'_summary.txt').write_text('#Amplicons = 0\\n')
         self.aa.write_text(self.aa.read_text().replace('Reusing cstats from ', 'Did not confirm '))
         unconfirmed=run_bounded_downstream(self.sample,self.seeds,self.runtime,self.entry,self.verified,
                                            self.config,self.root/'unconfirmed',measurement)
-        self.assertEqual(unconfirmed['status'],'failed')
+        self.assertEqual(unconfirmed['status'],'not_detected',unconfirmed.get('reason'))
+        evidence=json.loads((Path(unconfirmed['run_dir'])/'aa_background.json').read_text())
+        self.assertFalse(evidence['reuse_confirmed'])
+        self.assertEqual(evidence['outcome'],'reuse_unverified')
 
     def test_truncated_graph_creates_new_attempt_and_does_not_reuse_cache(self):
         first=self.run_downstream();graph=next((Path(first['run_dir'])/'aa').glob('*_graph.txt'));graph.write_text('')
