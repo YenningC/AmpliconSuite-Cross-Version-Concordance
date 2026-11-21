@@ -93,11 +93,100 @@ def _source_evidence(sample, baseline, sets, joints, selected, out, config):
     atomic_json(out / 'source_bridge' / (sample['sample_id'] + '.seeds.json'), evidence)
 
 
-def run_global_sample(sample, baseline, versions, entries, config, out, runtimes, verified, verified_runtime):
+def _run_native_aa(sample, native, call, runtime, entry, verified, settings, seed_settings, out):
+    from . import concordance as api
+    from .concordance_global_seeds import global_seed_measurement
+
+    sid, vid = sample['sample_id'], runtime['id']
+    try:
+        measurement = global_seed_measurement(Path(call['seed_attempt']), call['seeds'],
+                                               sample, runtime, verified, seed_settings)
+        joint = timed_call('selected_seed_downstream', api.run_bounded_downstream, sample, native,
+                           runtime, entry, verified, settings, out / 'downstream_jobs' / sid / vid,
+                           measurement, timing=dict(sample_id=sid, version=vid))
+        if joint.get('run_dir'):
+            cache = joint.get('component_cache', {}).get('aa', {})
+            record_native_aa(joint['run_dir'], sid, vid, role='producer_reference' if cache.get('hit')
+                             else 'current_execution', producer_id=cache.get('producer_run_dir', ''))
+        return joint
+    except (OSError, ValueError, KeyError, RuntimeError, LocalFailure) as exc:
+        return empty_record(sid, '__selected_seeds__', vid, 'failed', getattr(exc, 'stage', 'aa'), str(exc),
+                            analysis_kind='aa_ac', source_version=sample['source_version'],
+                            comparison_eligible=False, detected=None)
+
+
+def _recover_global_sample(sample, baseline, versions, entries, config, out, verified, verified_runtime, recovery):
+    from .concordance_global_report import global_report_units
+
+    sid = sample['sample_id']
+    prior, sampling = recovery['previous_sample'], recovery['sampling']
+    sets = sample['global_seed_sets'] = prior['global_seed_sets']
+    for name in ('upstream_seed_ids', 'selected_seed_ids', 'global_executed_seed_ids'):
+        sample[name] = prior[name]
+    selected = sampling['selected']
+    settings = dict(config, _component_cache_dir=str(out / '.component_cache'))
+    seed_settings = dict(settings, _io_policy_path=prior['_policy_path'])
+    prior_policy = json.loads(Path(prior['_policy_path']).read_text())
+    rescue_limit = config['aa_rescue_unique_bp']
+    rescue_policy = dict(prior_policy, max_unique_bp=rescue_limit)
+    joints = dict(recovery['completed'])
+    final_states = dict(prior['global_version_statuses'])
+    retries = recovery['retries']
+    audit = dict(source=str(Path(config['recover_aa_from']).resolve()),
+                 prior_report_sha256=recovery['checksums'], prior_seed_sha256=recovery['seeds'],
+                 completed_versions_reused=list(recovery['completed']), unique_rescue_limit_bp=rescue_limit,
+                 cnvkit_and_seed_filter_executed=False, retries=retries)
+    audit_path = out / 'aa_recovery' / (sid + '.json')
+    atomic_json(out / 'sampling' / (sid + '.json'), sampling)
+    atomic_json(out / 'global_upstream' / sid / 'discovery.json', sets)
+    atomic_json(audit_path, audit)
+    print(f'  {sid}: verified prior CNVkit and seed files; AA recovery will retry {len(retries)} Suite paths', flush=True)
+    for vid, evidence in retries.items():
+        call = sets[vid]
+        native = selected_native(call['seeds'], selected)
+        if [s['seed_id'] for s in native] != sample['global_executed_seed_ids'][vid]:
+            raise ValueError(f'AA recovery changed the original AA seed rows for {sid} / {vid}')
+        runtime = verified_runtime(vid, sid)
+        original_solver = evidence['solver']
+        policy_path = out / 'policies' / f'{sid}.{vid}.aa_recovery.json'
+        atomic_json(policy_path, rescue_policy)
+        evidence.update(attempt_policy=str(policy_path), effective_requested_limit_bp=rescue_limit)
+        print(f'  {sid} / {vid}: retrying AA with max_unique_bp={rescue_limit:,}', flush=True)
+        if original_solver and verified[vid].get('official_solver', {}).get('requested') != original_solver['requested']:
+            joint = empty_record(sid, '__selected_seeds__', vid, 'failed', 'runtime_check',
+                                 'AA recovery could not verify the original solver',
+                                 analysis_kind='aa_ac', source_version=sample['source_version'],
+                                 comparison_eligible=False, detected=None)
+        else:
+            joint = _run_native_aa(sample, native, call, runtime, entries[vid], verified[vid],
+                                   dict(settings, _io_policy_path=str(policy_path)), seed_settings, out)
+        joints[vid] = joint
+        stage = joint.get('stage', 'result_reading')
+        final_states[vid] = dict(status=joint['status'], stage=stage)
+        evidence.update(status=joint['status'], stage=stage, reason=joint.get('reason'),
+                        run_dir=joint.get('run_dir'))
+        atomic_json(audit_path, audit)
+    sample['global_version_statuses'] = final_states
+    _source_evidence(sample, baseline, sets, joints, selected, out, config)
+    upstream, newly_projected = global_report_units(sample, joints, versions)
+    new_rows = {(r['version'], r['seed_id']): r for r in newly_projected}
+    downstream = [new_rows[vid, row['seed_id']] if vid in retries else row
+                  for vid in versions for row in recovery['previous_downstream'][vid]]
+    return upstream, downstream
+
+
+def run_global_sample(sample, baseline, versions, entries, config, out, runtimes, verified, verified_runtime,
+                      *, aa_recovery=None):
+    if config.get('recover_aa_from'):
+        if aa_recovery is None:
+            from .concordance_aa_recovery import verify_recovery_source
+            aa_recovery = verify_recovery_source(config, out)
+        return _recover_global_sample(sample, baseline, versions, entries, config, out, verified,
+                                      verified_runtime, aa_recovery[sample['sample_id']])
     from . import concordance as api
     from .concordance_global_cnv import global_cns
     from .concordance_global_report import global_loci, global_report_units
-    from .concordance_global_seeds import global_suite_seeds, global_seed_measurement
+    from .concordance_global_seeds import global_suite_seeds
 
     sid = sample['sample_id']
     settings = dict(config, _io_policy_path=sample['_policy_path'],
@@ -162,20 +251,7 @@ def run_global_sample(sample, baseline, versions, entries, config, out, runtimes
         print(f'  {sid} / {vid}: AA/AC from {len(native)} native seed intervals', flush=True)
         runtime = verified_runtime(vid, sid)
         entry = entries[vid]
-        try:
-            measurement = global_seed_measurement(Path(result['seed_attempt']), result['seeds'],
-                                                   sample, runtime, verified[vid], settings)
-            joint = timed_call('selected_seed_downstream', api.run_bounded_downstream, sample, native,
-                               runtime, entry, verified[vid], settings, out / 'downstream_jobs' / sid / vid,
-                               measurement, timing=dict(sample_id=sid, version=vid))
-            if joint.get('run_dir'):
-                cache = joint.get('component_cache', {}).get('aa', {})
-                record_native_aa(joint['run_dir'], sid, vid, role='producer_reference' if cache.get('hit')
-                                 else 'current_execution', producer_id=cache.get('producer_run_dir', ''))
-        except (OSError, ValueError, KeyError, RuntimeError, LocalFailure) as exc:
-            joint = empty_record(sid, '__selected_seeds__', vid, 'failed', getattr(exc, 'stage', 'aa'), str(exc),
-                                 analysis_kind='aa_ac', source_version=sample['source_version'],
-                                 comparison_eligible=False, detected=None)
+        joint = _run_native_aa(sample, native, result, runtime, entry, verified[vid], settings, settings, out)
         joints[vid] = joint
     atomic_json(out / 'sampling' / (sid + '.json'), dict(all_seeds=loci, selected=selected, parameters=sampling,
                 native_selected_ids=executed, rule='paired_sampling_from_union_of_global_overlapping_seed_loci'))

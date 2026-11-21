@@ -13,6 +13,8 @@ from pathlib import Path
 import runpy
 import sys
 
+DEFAULT_MAX_UNIQUE_BP = 100_000_000
+
 
 class ScanForbidden(RuntimeError):
     pass
@@ -33,7 +35,7 @@ def install_guard(policy, audit_path=None):
         raise ValueError('No approved indexed BAMs in policy')
     limits = {k: int(policy.get(k, v)) for k, v in (
         ('max_fetch_bp', 50000000), ('max_total_fetch_bp', 500000000),
-        ('max_total_reads', 20000000))}
+        ('max_total_reads', 20000000), ('max_unique_bp', DEFAULT_MAX_UNIQUE_BP))}
     if any(v <= 0 for v in limits.values()):
         raise ValueError('BAM access budgets must be positive')
     state = dict(policy='indexed_regions_only', queries=0, requested_bp=0,
@@ -92,8 +94,7 @@ def install_guard(policy, audit_path=None):
             last += 1
         new_bp = right - left - replaced_bp
         unique = state['unique_requested_bp'] + new_bp
-        unique_limit = min(int(policy.get('max_unique_bp', 100000000)), 100000000,
-                           max(1, int(.9 * sum(lengths.values()))))
+        unique_limit = min(limits['max_unique_bp'], max(1, sum(lengths.values()) * 9 // 10))
         state['effective_max_unique_bp'] = unique_limit
         if unique > unique_limit:
             state['first_rejected_unique_request'] = state.get('first_rejected_unique_request',

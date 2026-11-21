@@ -33,6 +33,19 @@ asconcordance report --from-run runs/global --out reports/global
 
 `global_cnv.processes` 默认 1，可单独设置 CNVkit 工作进程数。`global_cnv.timeout_seconds` 默认每个全局命令 86400 秒。AA/AC 的限时与读取预算仍由原字段控制。直接重新运行相同命令可恢复完成的有效阶段。全局 CNV 全流程的实际运行时间以本机日志为准。
 
+## AA 读取预算恢复
+
+复制原运行清单并增加下面两个字段，选择一个新的输出目录。原运行目录提供已整理好的全局筛种、实际抽样和 AA/AC 结果。用于重试的 AA 唯一区段预算必须高于原值，并受单次请求、累计请求、读取数、参考基因组范围及超时限制。
+
+```json
+{
+  "recover_aa_from": "/path/to/previous_global_run",
+  "aa_rescue_unique_bp": 150000000
+}
+```
+
+程序核对原运行报告、输入与版本配置，沿用已经完成的种子和下游记录。仅当 AA 的已有记录显示唯一区段预算耗尽时，才以新的限额启动同一版本的 AA 与 AC。AA 仍使用原生种子、原软件和原科学参数。新报告保留复用来源、本次重试及其有效读取上限。
+
 | 输出 | 怎样读 |
 |---|---|
 | `global_upstream/<sample>/discovery.json` | 各 Suite 的 CNVkit 版本、CNS 路径及复用来源、筛种是否完成、原生种子和失败原因 |

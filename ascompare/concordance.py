@@ -15,7 +15,7 @@ from .inputs import safe_id
 from .parsing import merge_intervals
 from .runner import empty_record, execute, local_reference, check_ac_runtime, prepare_ac_input
 from .versions import load_lock, verify_runtime
-from .concordance_policy import guarded_command
+from .concordance_policy import DEFAULT_MAX_UNIQUE_BP, guarded_command
 from .concordance_aa_stats import seed_stage_measurement, stage_measurement
 from .concordance_timing import TimingSession, measure, timed_call, record_native_aa
 
@@ -24,7 +24,8 @@ FIXED_REFERENCE = 'suite-1.6.2'
 PATH_KEYS = {'alignment', 'index', 'normal_alignment', 'normal_index', 'seeds_bed',
              'source_seed_bed', 'baseline_cns', 'aa_dir', 'ac_dir', 'run_dir',
              'result_dir', 'stages_json', 'baseline_provenance', 'fasta', 'aa_data_repo', 'background_bed',
-             'aa_script', 'ac_script', 'suite_script', 'cnvkit_script', 'version_lock', 'reuse_aa_from', 'reuse_global_cnv_from'}
+             'aa_script', 'ac_script', 'suite_script', 'cnvkit_script', 'version_lock', 'reuse_aa_from',
+             'reuse_global_cnv_from', 'recover_aa_from'}
 
 
 def fast_fingerprint(path):
@@ -268,6 +269,15 @@ def load_manifest(path):
         origin = config['reuse_global_cnv_from']
         if not global_run or not isinstance(origin, str) or not (Path(origin) / 'global_cnv_cache').is_dir():
             raise ValueError('reuse_global_cnv_from needs a prior global with_bam output')
+    if 'recover_aa_from' in config or 'aa_rescue_unique_bp' in config:
+        origin = config.get('recover_aa_from')
+        if not global_run or not isinstance(origin, str) or not (Path(origin) / 'report_inputs.sha256.json').is_file():
+            raise ValueError('recover_aa_from needs a completed global with_bam report directory')
+        policy = config.get('io_policy', {})
+        limit = config.get('aa_rescue_unique_bp')
+        if (type(limit) is not int or not int(policy.get('max_unique_bp', DEFAULT_MAX_UNIQUE_BP))
+                < limit <= int(policy.get('max_total_fetch_bp', 500_000_000))):
+            raise ValueError('aa_rescue_unique_bp must exceed the original unique limit and fit within max_total_fetch_bp')
     import math
     for key, default in (('min_size', 50000), ('min_flow', 1.0)):
         value = float(config.get('ac_parameters', {}).get(key, default))
@@ -623,6 +633,13 @@ def _run_locked(config, lock, entries, out, check_only):
     atomic_json(identity_file, dict(hash=input_identity, sources=source_files))
     atomic_json(out / 'input_check.json', checks)
     table(out / 'input_check.tsv', checks)
+    aa_recovery = None
+    if config.get('recover_aa_from'):
+        if all(row['status'] == 'ok' for row in checks):
+            from .concordance_aa_recovery import verify_recovery_source
+            aa_recovery = verify_recovery_source(config, out)
+        elif not check_only:
+            raise ValueError('AA recovery requires all original inputs to pass validation; see input_check.tsv')
     if check_only:
         atomic_json(out / 'import_format_check.json', import_checks)
         table(out / 'import_format_check.tsv', import_checks)
@@ -737,7 +754,8 @@ def _run_locked(config, lock, entries, out, check_only):
         elif global_run:
             from .concordance_global_workflow import run_global_sample
             observed_up, observed_down = run_global_sample(
-                sample, baseline, versions, entries, config, out, runtimes, verified, verified_runtime)
+                sample, baseline, versions, entries, config, out, runtimes, verified, verified_runtime,
+                aa_recovery=aa_recovery)
             upstream.extend(observed_up)
             downstream.extend(observed_down)
         elif not chosen:
@@ -886,11 +904,11 @@ def main(argv=None):
             source = Path(args.from_run).resolve() if args.from_run else out
             original = json.loads((source / 'provenance.json').read_text())
             run_version = original.get('program_version')
-            if run_version not in {PROGRAM_VERSION, '0.4.4.dev2', '0.4.4.dev1', '0.4.4.dev0', '0.4.3', '0.4.2', '0.4.1', '0.4.0',
+            if run_version not in {PROGRAM_VERSION, '0.5.0.dev0', '0.4.4.dev2', '0.4.4.dev1', '0.4.4.dev0', '0.4.3', '0.4.2', '0.4.1', '0.4.0',
                                    '0.3.0', '0.3.1', '0.3.2'}:
                 raise ValueError('Use the original program version to redraw this report, or run the manifest into a new output directory')
             names = ('downstream_records.json', 'upstream_records.json', 'config.resolved.json')
-            if run_version in {PROGRAM_VERSION, '0.4.4.dev2', '0.4.4.dev1', '0.4.4.dev0', '0.4.3', '0.4.2'}:
+            if run_version in {PROGRAM_VERSION, '0.5.0.dev0', '0.4.4.dev2', '0.4.4.dev1', '0.4.4.dev0', '0.4.3', '0.4.2'}:
                 names += ('local_cnv_comparator_records.json',)
             expected = json.loads((source / 'report_inputs.sha256.json').read_text())
             if set(expected) != set(names):

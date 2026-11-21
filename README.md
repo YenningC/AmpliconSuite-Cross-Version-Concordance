@@ -6,7 +6,7 @@
 
 AmpliconSuite Cross-Version Concordance is an independent, local research tool. It compares existing AmpliconSuite outputs, orchestrates selected-seed AA/AC runs, and compares native seed discovery from whole-genome CNVkit. It produces per-sample similarity ladders, paired difference tables and compatibility reports.
 
-**Version:** 0.5.0.dev0 · **Fixed reference:** Suite **1.6.2**, AA **1.6.r2**, AC **2.0.1**. The reference is frozen; installing a newer upstream release does not change it. This project is not an official AmpliconSuite component.
+**Version:** 0.5.0.dev1 · **Fixed reference:** Suite **1.6.2**, AA **1.6.r2**, AC **2.0.1**. The reference is frozen; installing a newer upstream release does not change it. This project is not an official AmpliconSuite component.
 
 > Similarity describes observed software outputs. It is not a probability of biological truth or proof that complete workflows are interchangeable. Compatibility remains **insufficient evidence** when margins are unspecified or evidence is inadequate.
 
@@ -15,6 +15,8 @@ AmpliconSuite Cross-Version Concordance is an independent, local research tool. 
 New manifests use `"cnv_scope": "global"`. Each Suite obtains its recipe's whole-genome CNVkit segments, applies its own seed filters and runs AA/AC on its native seeds at the sampled loci. Matching whole-genome measurements are reused across Suite versions. Completed discovery can find seeds even when the original seed BED was empty. Manifests that explicitly configured legacy local windows keep that scope.
 
 [Global execution, reuse and reporting](docs/global_cnv.md) · [Manifest example](examples/concordance.with_bam.json)
+
+To retry AA jobs that exceeded the unique-region limit, use the completed global run as `recover_aa_from` and set `aa_rescue_unique_bp` in a separate run. Recovery uses the original discovery, seed selection and verified completed AA/AC results from that run. [Recovery settings](docs/global_cnv.md#aa-读取预算恢复)
 
 ## Official Suite defaults for selected regions
 
@@ -212,6 +214,7 @@ Repeat the same `run` command to resume. Successful caches are checked against r
 
 | Version | Main changes |
 |---|---|
+| 0.5.0.dev1 | Retry AA jobs that exceeded a unique-region budget using a separate bounded policy and verified results from the previous global run. |
 | 0.5.0.dev0 | Discover seeds with global CNVkit, reuse verified stages, pair loci and reconstruct each Suite’s own native seeds. |
 | 0.4.4 (development) | Add an official Suite parameter policy for selected-region reconstruction and classification. |
 | 0.4.3 | Time bounded stages, use CYCLES for reconstruction, cache AA and AC separately and share verified identical AA jobs across Suite recipes. |

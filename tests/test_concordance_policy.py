@@ -99,5 +99,25 @@ class BoundedPolicyTests(unittest.TestCase):
         self.assertNotEqual(r.returncode,0)
         self.assertIn('genome tiling',r.stderr)
 
+    def test_explicit_budget_above_100_mb_preserves_other_query_limits(self):
+        with pysam.AlignmentFile(str(self.bam), 'wb', header={
+            'HD': {'SO': 'coordinate'}, 'SQ': [{'SN': 'chr1', 'LN': 160000000}]
+        }):
+            pass
+        pysam.index(str(self.bam))
+        policy = json.loads(self.policy.read_text())
+        policy.update(max_fetch_bp=50000000, max_total_fetch_bp=170000000)
+        requests = 'for start in (0, 40000000, 80000000): list(bam.fetch("chr1", start, start+40000000))'
+        self.policy.write_text(json.dumps(policy))
+        old = self.run_script(requests)
+        self.assertNotEqual(old.returncode, 0)
+        self.assertIn('Unique genomic coverage budget exceeded', old.stderr)
+        self.policy.write_text(json.dumps(dict(policy, max_unique_bp=150000000)))
+        recovered = self.run_script(requests)
+        self.assertEqual(recovered.returncode, 0, recovered.stderr)
+        refused = self.run_script('list(bam.fetch("chr1", 0, 160000000))')
+        self.assertNotEqual(refused.returncode, 0)
+        self.assertIn('Whole-contig', refused.stderr)
+
 
 if __name__=='__main__': unittest.main()
