@@ -21,6 +21,14 @@
 
 同一样本的其他历史 Suite 结果可以列在 `samples[].global_cnv_results`，每项填写 `{"result_dir": "/data/another_suite_result"}`。另有 `comparison_results[].result_dir` 时也会检查。可在归档项填写已有的原始 `cns_sha256`。若历史 CNS 与配套 CNR 的染色体覆盖端点相悖，程序优先从同版 CNR 重新分段。若已有 Concordance 全局运行，顶层 `reuse_global_cnv_from` 可指向其分析输出根目录，从只读目录复用经校验的同配方 CNS。有历史 CNS 而缺少运行记录，或者记录中的 BAM 已无法对应当前数据时，程序保留拒绝原因。历史记录常缺生成时的依赖和参考资源摘要，观察值与正式兼容结论的证据等级分开标记。归档需保留原生目录布局与能识别的 BAM/正常对照路径。
 
+### 共享原始覆盖度
+
+在顶层 `cnvkit_runtimes` 中，为每个精确的 CNVkit 版本设置 `python`、`script`，可用 `env` 和 `extra_path` 指明 CNVkit 所需的动态库、Rscript 和 DNAcopy 环境。[配置示例](../examples/cnvkit_runtimes.example.json)
+
+全局运行使用对应版本的登记。若该 Suite 已填写 CNVkit 解释器或脚本，已填写的路径需与登记一致才应用登记。显式的 Suite 专用 `cnvkit_env`、`cnvkit_extra_path` 优先。登记省略 `env`、`extra_path` 时采用当前进程环境与 CNVkit 解释器目录；Suite 的 AA/AC 环境依旧用于原生筛种和下游分析。
+
+共享的是原生 `bedcov` 的精确输出。只有计数引擎、环境、输入、分箱和计数选项都匹配才命中。各版仍各自生成参考、校正并执行最终 CBS。0.9.14 的原生分箱或计数选项可能与 0.9.10、0.9.13 不同，按各版实际发出的请求决定能否复用。
+
 ## 执行与验收
 
 填写本机对应的组件运行环境后，在本地运行以下命令。
@@ -31,7 +39,7 @@ asconcordance run --manifest concordance.json --out runs/global
 asconcordance report --from-run runs/global --out reports/global
 ```
 
-`global_cnv.processes` 默认 1，可单独设置 CNVkit 工作进程数。`global_cnv.timeout_seconds` 默认每个全局命令 86400 秒。AA/AC 的限时与读取预算仍由原字段控制。直接重新运行相同命令可恢复完成的有效阶段。全局 CNV 全流程的实际运行时间以本机日志为准。
+`global_cnv.processes` 默认 1，可单独设置 CNVkit 工作进程数。首次设置为 4 时，建议用一例代表性样本对照 `.cnr`、`.cns` 和种子 BED，再用于批量运行。进程数可能改变覆盖度请求的分块方式，应在同一批的各版本使用相同设置以提高覆盖度缓存命中率。`global_cnv.timeout_seconds` 默认每个全局命令 86400 秒。AA/AC 的限时与读取预算仍由原字段控制。直接重新运行相同命令可恢复完成的有效阶段。全局 CNV 全流程的实际运行时间以本机日志为准。
 
 ## AA 读取预算恢复
 

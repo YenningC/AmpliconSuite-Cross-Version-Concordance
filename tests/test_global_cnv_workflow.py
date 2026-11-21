@@ -9,7 +9,7 @@ import pysam
 
 from ascompare.common import atomic_json, digest
 from ascompare.concordance import load_manifest, run_concordance
-from ascompare.concordance_global_workflow import _source_evidence
+from ascompare.concordance_global_workflow import _cnvkit_runtime, _source_evidence
 
 
 class GlobalWorkflowTest(unittest.TestCase):
@@ -47,6 +47,14 @@ class GlobalWorkflowTest(unittest.TestCase):
         return load_manifest(self.manifest)
 
     def test_unseeded_input_still_discovers_and_routes_only_native_target_seeds(self):
+        self.config['cnvkit_runtimes'] = [
+            dict(version='0.9.13', python='/exact/bin/python', script='/exact/bin/cnvkit.py',
+                 extra_path=['/tools/R'])
+        ]
+        self.config['runtimes'][0].update(
+            cnvkit_python='/exact/bin/python', cnvkit_script='/exact/bin/cnvkit.py',
+            env={'DYLD_LIBRARY_PATH': '/aa/lib'},
+        )
         config, lock, entries = self.load()
         self.assertEqual(config['cnv_scope'],'global')
         self.assertEqual(config['parameter_policy'],'suite_defaults')
@@ -63,7 +71,7 @@ class GlobalWorkflowTest(unittest.TestCase):
         out = self.root / 'run'
         # Only routing is exercised here. Native scientific outputs have separate controls.
         with (patch('ascompare.concordance_global_cnv.global_cns',side_effect=native) as cnv,
-              patch('ascompare.concordance_global_seeds.global_suite_seeds',side_effect=[[],seeds]),
+              patch('ascompare.concordance_global_seeds.global_suite_seeds',side_effect=[[],seeds]) as seed_filter,
               patch('ascompare.concordance_official_solver.official_solver',return_value=('clarabel','synthetic')),
               patch('ascompare.concordance.verify_runtime',return_value={'ready':True}),
               patch('ascompare.concordance_global_seeds.global_seed_measurement',return_value=None),
@@ -72,6 +80,15 @@ class GlobalWorkflowTest(unittest.TestCase):
               patch('ascompare.concordance_cohort_plot.plot_cohort_compatibility')):
             run_concordance(config,lock,entries,out)
         self.assertEqual(cnv.call_count,2)
+        for call in cnv.call_args_list:
+            runtime = call.args[1]
+            self.assertEqual(runtime['cnvkit_python'], '/exact/bin/python')
+            self.assertEqual(runtime['cnvkit_script'], '/exact/bin/cnvkit.py')
+            self.assertEqual(runtime['cnvkit_env'], {})
+            self.assertEqual(runtime['cnvkit_extra_path'], ['/tools/R'])
+        source_seed_runtime = seed_filter.call_args_list[0].args[1]
+        self.assertEqual(source_seed_runtime['env'], {'DYLD_LIBRARY_PATH': '/aa/lib'})
+        self.assertNotIn('cnvkit_env', source_seed_runtime)
         self.assertEqual(observed,[(self.target,seeds)])
         records=json.loads((out/'upstream_records.json').read_text())
         self.assertEqual({r['version']:r['status'] for r in records},
@@ -79,6 +96,19 @@ class GlobalWorkflowTest(unittest.TestCase):
         sets=json.loads((out/'global_upstream/SYNTHETIC/discovery.json').read_text())
         self.assertTrue(sets[self.target]['historical_provenance_limited'])
         self.assertTrue((out/'result.tsv').is_file())
+
+    def test_global_cnv_registry_preserves_explicit_overrides_and_alternate_installations(self):
+        tool = dict(python='/registry/python', script='/registry/cnvkit.py',
+                    env={'R_LIBS': '/registry/R'}, extra_path=['/registry/bin'])
+        registry = {'0.9.13': tool}
+        runtime = dict(cnvkit_script=tool['script'], cnvkit_env={}, cnvkit_extra_path=[])
+        updated = _cnvkit_runtime(runtime, '0.9.13', registry)
+        self.assertEqual(updated['cnvkit_python'], tool['python'])
+        self.assertEqual(updated['cnvkit_env'], {})
+        self.assertEqual(updated['cnvkit_extra_path'], [])
+        for alternate in (dict(cnvkit_python='/alternate/python'), dict(cnvkit_version='0.9.14')):
+            self.assertIs(_cnvkit_runtime(alternate, '0.9.13', registry), alternate)
+        self.assertIs(_cnvkit_runtime(runtime, '0.9.10', registry), runtime)
 
     def test_aa_recovery_keeps_verified_jobs_and_retries_the_unique_limit_failure(self):
         from ascompare.concordance_global_seeds import FINAL_BED, _native_seeds

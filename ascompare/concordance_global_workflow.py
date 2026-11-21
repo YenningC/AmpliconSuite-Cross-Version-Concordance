@@ -11,6 +11,20 @@ from .concordance_timing import timed_call, record_native_aa
 from .runner import empty_record
 
 
+def _cnvkit_runtime(runtime, version, registry):
+    tool = registry.get(version)
+    if not tool or runtime.get('cnvkit_version', version) != version:
+        return runtime
+    if any(runtime.get('cnvkit_' + key) not in (None, '', tool[key]) for key in ('python', 'script')):
+        return runtime
+    # A registry entry describes an independent CNVkit environment. Applying it
+    # only here keeps AA/AC and their seed-filter environments untouched.
+    return dict(runtime, cnvkit_version=version, cnvkit_python=tool['python'],
+                cnvkit_script=tool['script'],
+                cnvkit_env=runtime.get('cnvkit_env', tool.get('env', {})),
+                cnvkit_extra_path=runtime.get('cnvkit_extra_path', tool.get('extra_path', [])))
+
+
 def selected_native(seeds, loci):
     """Select original BED rows, preserving their order, fields and boundaries."""
     spans = {}
@@ -194,6 +208,7 @@ def run_global_sample(sample, baseline, versions, entries, config, out, runtimes
     sets = sample['global_seed_sets'] = {}
     jobs = out / 'global_upstream' / sid
     mapped = load_builtin_map()['versions']
+    cnvkit_registry = {tool['version']: tool for tool in config.get('cnvkit_runtimes', [])}
     for vid in versions:
         entry = entries[vid]
         expected = mapped[vid]['cnvkit_version']
@@ -203,7 +218,7 @@ def run_global_sample(sample, baseline, versions, entries, config, out, runtimes
                                   supported_labels=entry.get('supported_labels', entry.get('supported_classes', [])))
         if vid not in runtimes:
             continue
-        runtime = runtimes[vid]
+        runtime = _cnvkit_runtime(runtimes[vid], expected, cnvkit_registry)
         timing = dict(sample_id=sid, version=vid)
         stage = 'cnvkit'
         try:
